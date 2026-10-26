@@ -118,3 +118,21 @@ def test_index_without_the_placeholder_is_refused(fake_frontend_dist):
     (fake_frontend_dist / "index.html").write_text("<html>no placeholder</html>")
     with pytest.raises(RuntimeError, match="placeholder"):
         create_app(load_settings(DEV_VAULT))
+
+
+def test_symlink_present_at_startup_is_not_served(fake_frontend_dist):
+    """The file list is made at startup; a link already there must be left out."""
+    (fake_frontend_dist.parent / "secret.txt").write_text("SECRET OUTSIDE DIST")
+    (fake_frontend_dist / "assets" / "leak.js").symlink_to(fake_frontend_dist.parent / "secret.txt")
+    (fake_frontend_dist / ".env").write_text("HIDDEN")
+    client = TestClient(create_app(load_settings(DEV_VAULT)), base_url=BASE)
+    assert "SECRET OUTSIDE DIST" not in client.get("/assets/leak.js").text
+    assert "HIDDEN" not in client.get("/.env").text
+    assert client.get("/assets/app.js").text == "console.log('app')"
+
+
+def test_files_are_served_by_exact_listed_path_only(client):
+    # ("/assets/./app.js" isn't here: clients remove "./" before sending, so it
+    # arrives as the real path.)
+    for path in ("/assets//app.js", "/ASSETS/app.js", "/assets/app.js/"):
+        assert client.get(path).text != "console.log('app')"

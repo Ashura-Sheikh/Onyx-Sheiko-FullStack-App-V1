@@ -7,9 +7,10 @@ with that nonce (see frontend/src/nonce.ts); every other inline style or
 script is still blocked (threat model T6). API responses keep style-src
 'self' with no nonce.
 
-Other files are served only if they really are files inside dist (real path
-checked, no hidden files). Any other non-API path gets index.html, so the
-app's own routes work on reload. /api/* paths never fall through to it.
+Other files are served only from a list of dist's regular files made at
+startup (no hidden files, no symlinks); a request path is only a key into
+it. Any other non-API path gets index.html, so the app's own routes work on
+reload. /api/* paths never fall through to it.
 """
 
 import os
@@ -46,19 +47,33 @@ def mount_frontend(app: FastAPI, dist: Path) -> None:
         # A new nonce every time, so the page must never be cached.
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
-    def static_file(path: str) -> Path | None:
-        if not path or any(part.startswith(".") or part == "" for part in path.split("/")):
-            return None
-        real = Path(os.path.realpath(dist_real / path))
-        if not real.is_relative_to(dist_real) or not real.is_file() or real == index_file:
-            return None
-        return real
+    # Every servable file, listed once at startup. A request path is only ever
+    # used as a key into this table, never to build a file path, so no URL can
+    # reach a file outside it (CodeQL py/path-injection). Rebuilt files need a
+    # server restart, as does a new index.html.
+    files = _servable_files(dist_real, index_file) if template is not None else {}
 
     @app.get("/{path:path}", include_in_schema=False)
     def frontend(path: str, request: Request) -> Response:
         if path == "api" or path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        file = static_file(path) if template is not None else None
+        file = files.get(path)
         if file is not None:
             return FileResponse(file)
         return index(request)
+
+
+def _servable_files(dist_real: Path, index_file: Path) -> dict[str, Path]:
+    """Regular files inside dist, by relative path. Skips hidden files and
+    folders, symlinks, and index.html (always generated per request)."""
+    found: dict[str, Path] = {}
+    for folder, dirs, names in os.walk(dist_real, followlinks=False):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in names:
+            full = Path(folder, name)
+            if name.startswith(".") or full.is_symlink() or not full.is_file():
+                continue
+            if full == index_file:
+                continue
+            found[full.relative_to(dist_real).as_posix()] = full
+    return found
