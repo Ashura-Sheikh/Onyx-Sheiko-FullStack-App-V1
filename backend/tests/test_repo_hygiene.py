@@ -34,3 +34,19 @@ def test_licence_is_mit():
 def test_security_policy_and_threat_model_exist():
     assert (REPO_ROOT / "SECURITY.md").is_file()
     assert (REPO_ROOT / "docs" / "threat-model.md").is_file()
+
+
+def test_release_process_is_documented():
+    text = (REPO_ROOT / "docs" / "releasing.md").read_text(encoding="utf-8")
+    assert "## Gate items" in text
+    assert "fresh clone of the tag" in text
+
+
+def test_backend_and_frontend_versions_match():
+    """docs/releasing.md: the tag and both version fields must agree."""
+    import json
+    import tomllib
+
+    backend = tomllib.loads((REPO_ROOT / "backend" / "pyproject.toml").read_text(encoding="utf-8"))
+    frontend = json.loads((REPO_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
+    assert backend["project"]["version"] == frontend["version"]
