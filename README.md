@@ -54,7 +54,26 @@ npm test
 npm run build
 ```
 
-How to run the app itself will be added with the backend skeleton (issue #4).
+### Running the server
+
+```bash
+cd backend
+uv run python -m onyx --vault ../dev-vault
+```
+
+It prints the address (`http://127.0.0.1:8731`) and a **one-time launch code**, valid for 10 minutes. The sign-in page (coming with the frontend, #7) asks for that code, which then becomes a session cookie for 12 hours, or until the server stops. You can also set the vault with `ONYX_VAULT` and the port with `--port`.
+
+- The server only ever listens on `127.0.0.1`; there's no option to change that.
+- It refuses to start without a vault folder, so it can't fall back to a default one.
+- Use `dev-vault/` (made-up data) for development. Connecting a real vault is a separate, later step.
+
+Until the frontend lands, you can try the API with `curl`. Every `/api` request needs the header `X-Onyx-Request: 1`:
+
+```bash
+curl -c "$TMPDIR/onyx-cookies.txt" -H 'X-Onyx-Request: 1' -H 'Content-Type: application/json' \
+     -d '{"code": "<launch code>"}' http://127.0.0.1:8731/api/session
+curl -b "$TMPDIR/onyx-cookies.txt" -H 'X-Onyx-Request: 1' http://127.0.0.1:8731/api/health
+```
 
 ## Contributing
 
