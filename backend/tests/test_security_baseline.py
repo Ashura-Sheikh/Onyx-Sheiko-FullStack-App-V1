@@ -324,3 +324,51 @@ def test_launch_code_and_session_never_logged(client, app, caplog):
     client.delete("/api/session", headers=with_session(session))
     assert code not in caplog.text
     assert session not in caplog.text
+
+
+# --- Startup output ------------------------------------------------------------
+
+
+def test_launch_code_is_printed_immediately_when_output_is_piped():
+    """Regression: Python buffers stdout when it isn't a terminal (an IDE task,
+    a pipe), so without flushing, the launch code didn't appear until the
+    server stopped. Found by running the real server, not the test client."""
+    import os
+    import select
+    import socket
+    import subprocess  # noqa: S404 - starts this project's own server
+    import sys
+    import time
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    proc = subprocess.Popen(  # noqa: S603 - fixed arguments, no shell
+        [sys.executable, "-m", "onyx", "--vault", str(DEV_VAULT), "--port", str(port)],
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        # Read with a real timeout: if the lines are buffered, nothing arrives
+        # and the test fails after 15 seconds instead of hanging.
+        output = b""
+        deadline = time.monotonic() + 15
+        while output.count(b"\n") < 3:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            ready, _, _ = select.select([proc.stdout], [], [], remaining)
+            if ready:
+                chunk = os.read(proc.stdout.fileno(), 4096)
+                if not chunk:
+                    break
+                output += chunk
+        lines = output.decode().splitlines()
+        assert len(lines) >= 3, "address, vault and launch code arrive while the server runs"
+        assert lines[0] == f"Onyx Sheiko: http://127.0.0.1:{port}"
+        assert lines[2].startswith("Launch code (one use, 10 minutes): ")
+        assert proc.poll() is None, "server is still running"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)

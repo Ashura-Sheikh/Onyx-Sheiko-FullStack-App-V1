@@ -34,10 +34,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"onyx: {error}", file=sys.stderr)
         return 2
     app = create_app(settings)
-    print(f"Onyx Sheiko: http://{HOST}:{settings.port}")
-    print(f"Vault: {settings.vault}")
     minutes = settings.launch_code_ttl // 60
-    print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}")
+    # flush=True: when output isn't a terminal (an IDE task, a pipe), Python
+    # buffers it, and the code wouldn't appear until the server stopped.
+    print(f"Onyx Sheiko: http://{HOST}:{settings.port}", flush=True)
+    print(f"Vault: {settings.vault}", flush=True)
+    print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}", flush=True)
     uvicorn.Server(uvicorn_config(app, settings)).run()
     return 0
 
