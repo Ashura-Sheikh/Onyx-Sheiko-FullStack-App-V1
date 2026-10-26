@@ -250,9 +250,21 @@ def test_dot_segments_are_refused_by_their_own_rule(setup):
 
 
 def test_symlinked_folders_are_not_followed_when_listing(setup):
-    """A link to a folder inside the vault would otherwise list its notes twice,
-    and a link loop would never end."""
+    """A link to a folder inside the vault would otherwise list its notes twice."""
     vault, root, _ = setup
     (root / "Alias").symlink_to(root / "Projects", target_is_directory=True)
-    (root / "Projects" / "Loop").symlink_to(root, target_is_directory=True)
     assert vault.list_notes() == ["Projects/Atlas.md", "Unicode — ✓ é 字.md"]
+
+
+def test_a_symlink_loop_does_not_hang_the_listing(setup):
+    """Run in a thread with a time limit, so a regression fails instead of hanging CI."""
+    import threading
+
+    vault, root, _ = setup
+    (root / "Projects" / "Loop").symlink_to(root, target_is_directory=True)
+    result = []
+    worker = threading.Thread(target=lambda: result.append(vault.list_notes()), daemon=True)
+    worker.start()
+    worker.join(timeout=5)
+    assert not worker.is_alive(), "listing didn't finish within 5 seconds"
+    assert result == [["Projects/Atlas.md", "Unicode — ✓ é 字.md"]]
