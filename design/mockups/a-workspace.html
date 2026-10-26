@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup A: Workspace · Onyx Sheiko</title>
+  <!-- Mockup only: Tailwind's in-browser build, pinned with an integrity hash. The real app ships built CSS. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js"
+          integrity="sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB"
+          crossorigin="anonymous"></script>
+  <style type="text/tailwindcss">
+    @custom-variant dark (&:where(.dark, .dark *));
+  </style>
+  <script src="data.js"></script>
+  <script src="shared.js"></script>
+</head>
+<body class="h-screen overflow-hidden bg-white text-sm text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+  <div class="flex h-full flex-col">
+    <!-- Top bar -->
+    <header class="flex h-11 shrink-0 items-center gap-3 border-b border-zinc-200 px-3 dark:border-zinc-800">
+      <span class="font-semibold tracking-tight">Onyx</span>
+      <span class="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:bg-violet-950 dark:text-violet-300">A · Workspace</span>
+      <button data-palette-open class="ml-4 flex w-72 items-center justify-between rounded-md border border-zinc-200 px-2.5 py-1 text-zinc-500 hover:border-zinc-300 dark:border-zinc-800">
+        Search or jump to… <kbd class="rounded border border-zinc-300 px-1 text-[10px] dark:border-zinc-700">⌘K</kbd>
+      </button>
+      <nav class="ml-auto flex gap-1">
+        <button data-view="notes" class="view-tab rounded px-2.5 py-1">Notes</button>
+        <button data-view="tasks" class="view-tab rounded px-2.5 py-1">Tasks</button>
+      </nav>
+      <button data-theme-toggle class="rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Toggle theme">◐</button>
+    </header>
+
+    <div class="flex min-h-0 flex-1">
+      <!-- Left: tree -->
+      <aside class="w-60 shrink-0 overflow-auto border-r border-zinc-200 p-2 dark:border-zinc-800">
+        <div class="mb-2 flex items-center justify-between px-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+          <span>Vault</span><button class="text-base leading-none hover:text-zinc-900 dark:hover:text-zinc-100" title="New note">+</button>
+        </div>
+        <ul id="tree" class="space-y-0.5"></ul>
+      </aside>
+
+      <!-- Middle: editor / task table -->
+      <main id="center" class="min-w-0 flex-1 overflow-auto"></main>
+
+      <!-- Right: inspector -->
+      <aside id="inspector" class="w-72 shrink-0 overflow-auto border-l border-zinc-200 p-4 dark:border-zinc-800"></aside>
+    </div>
+
+    <footer class="flex h-7 shrink-0 items-center gap-4 border-t border-zinc-200 px-3 text-xs text-zinc-500 dark:border-zinc-800">
+      <span>● Local · 127.0.0.1</span><span>dev-vault (made-up data)</span><span class="ml-auto">Saved</span>
+    </footer>
+  </div>
+
+  <script>
+    document.body.insertAdjacentHTML("beforeend", PALETTE_HTML)
+    let view = "notes"
+    let current = "atlas-kickoff"
+    let selectedTask = 1
+
+    function drawTabs() {
+      document.querySelectorAll(".view-tab").forEach((b) => {
+        const on = b.dataset.view === view
+        b.className = "view-tab rounded px-2.5 py-1 " + (on ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "hover:bg-zinc-100 dark:hover:bg-zinc-800")
+      })
+    }
+
+    function drawTree() {
+      document.getElementById("tree").innerHTML = MOCK.folders
+        .map((f) => `
+          <li><div class="flex items-center gap-1.5 px-2 py-1 font-medium text-zinc-600 dark:text-zinc-400">▾ ${esc(f.name)}</div>
+            <ul>${f.notes.map((id) => `
+              <li><button data-note="${esc(id)}" class="w-full truncate rounded py-1 pl-7 pr-2 text-left ${id === current && view === "notes" ? "bg-violet-100 text-violet-900 dark:bg-violet-950 dark:text-violet-200" : "hover:bg-zinc-100 dark:hover:bg-zinc-900"}">${esc(MOCK.notes[id].title)}</button></li>`).join("")}
+            </ul></li>`)
+        .join("")
+      document.querySelectorAll("[data-note]").forEach((b) => b.addEventListener("click", () => openNote(b.dataset.note)))
+    }
+
+    function drawNote() {
+      const n = MOCK.notes[current]
+      document.getElementById("center").innerHTML = `
+        <div class="mx-auto max-w-2xl px-8 py-8">
+          <div class="mb-1 text-xs text-zinc-500">${esc(n.folder)} / </div>
+          <h1 class="mb-4 text-2xl font-semibold tracking-tight">${esc(n.title)}</h1>
+          <div class="mb-6 flex gap-2 border-b border-zinc-200 pb-3 text-xs dark:border-zinc-800">
+            <button class="rounded bg-zinc-900 px-2 py-1 text-white dark:bg-zinc-100 dark:text-zinc-900">Read</button>
+            <button class="rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800">Edit</button>
+          </div>
+          <article class="leading-relaxed">${renderBody(n.body)}</article>
+        </div>`
+      document.querySelectorAll(".wikilink").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const id = noteIdByTitle(a.dataset.title); if (id) openNote(id) }))
+      document.getElementById("inspector").innerHTML = `
+        <h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Details</h2>
+        <dl class="mb-5 space-y-1.5">
+          <div class="flex justify-between"><dt class="text-zinc-500">Updated</dt><dd>${esc(n.updated)}</dd></div>
+          <div class="flex justify-between"><dt class="text-zinc-500">Folder</dt><dd>${esc(n.folder)}</dd></div>
+        </dl>
+        <h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Tags</h2>
+        <div class="mb-5 flex flex-wrap gap-1">${n.tags.map((t) => pill("#" + t, PRIORITY_CLASSES.low)).join("")}</div>
+        <h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Backlinks</h2>
+        <ul class="mb-5 space-y-1">${n.backlinks.length ? n.backlinks.map((id) => `<li><button data-note="${esc(id)}" class="text-violet-600 hover:underline dark:text-violet-400">${esc(MOCK.notes[id].title)}</button></li>`).join("") : '<li class="text-zinc-500">None</li>'}</ul>
+        <h2 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Related tasks</h2>
+        <ul class="space-y-1">${MOCK.tasks.filter((t) => n.tags.some((tag) => t.project.toLowerCase() === tag)).slice(0, 3).map((t) => `<li class="flex items-center justify-between gap-2"><span class="truncate">${esc(t.title)}</span>${pill(MOCK.stageLabels[t.status], STAGE_CLASSES[t.status])}</li>`).join("") || '<li class="text-zinc-500">None</li>'}</ul>`
+      document.querySelectorAll("#inspector [data-note]").forEach((b) => b.addEventListener("click", () => openNote(b.dataset.note)))
+    }
+
+    function drawTasks() {
+      document.getElementById("center").innerHTML = `
+        <div class="px-6 py-6">
+          <div class="mb-4 flex items-center gap-2">
+            <h1 class="text-xl font-semibold tracking-tight">Tasks</h1>
+            <span class="text-zinc-500">${MOCK.tasks.length}</span>
+            <button class="ml-auto rounded-md bg-violet-600 px-3 py-1.5 text-white hover:bg-violet-500">New task</button>
+          </div>
+          <table class="w-full text-left">
+            <thead class="text-xs uppercase tracking-wide text-zinc-500"><tr><th class="py-2">Title</th><th>Stage</th><th>Priority</th><th>Due</th><th>Project</th></tr></thead>
+            <tbody>${MOCK.tasks.map((t) => `
+              <tr data-task="${t.id}" class="cursor-pointer border-t border-zinc-200 dark:border-zinc-800 ${t.id === selectedTask ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}">
+                <td class="py-2 pr-3">${esc(t.title)}</td><td>${pill(MOCK.stageLabels[t.status], STAGE_CLASSES[t.status])}</td>
+                <td>${pill(t.priority, PRIORITY_CLASSES[t.priority])}</td><td class="text-zinc-500">${esc(t.due)}</td><td class="text-zinc-500">${esc(t.project)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`
+      document.querySelectorAll("[data-task]").forEach((r) => r.addEventListener("click", () => { selectedTask = Number(r.dataset.task); render() }))
+      const t = MOCK.tasks.find((x) => x.id === selectedTask)
+      const next = nextStage(t.status)
+      document.getElementById("inspector").innerHTML = `
+        <h2 class="mb-1 text-base font-semibold">${esc(t.title)}</h2>
+        <div class="mb-4 flex gap-1">${pill(MOCK.stageLabels[t.status], STAGE_CLASSES[t.status])}${pill(t.priority, PRIORITY_CLASSES[t.priority])}</div>
+        ${next ? `<button id="advance" class="mb-5 w-full rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">Move to ${esc(MOCK.stageLabels[next])} →</button>` : '<p class="mb-5 text-emerald-700 dark:text-emerald-400">Signed off and done.</p>'}
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Status history</h3>
+        <ol class="space-y-1 border-l border-zinc-200 pl-3 dark:border-zinc-800">${t.history.map((h) => `<li>${esc(h)}</li>`).join("")}</ol>`
+      const adv = document.getElementById("advance")
+      if (adv) adv.addEventListener("click", () => { advanceTask(t.id); render() })
+    }
+
+    function openNote(id) { current = id; view = "notes"; render() }
+    function render() { drawTabs(); drawTree(); view === "notes" ? drawNote() : drawTasks() }
+
+    document.querySelectorAll(".view-tab").forEach((b) => b.addEventListener("click", () => { view = b.dataset.view; render() }))
+    initTheme()
+    initPalette((item) => { if (item.kind === "Note") openNote(item.id); else { view = "tasks"; selectedTask = item.id; render() } })
+    render()
+  </script>
+</body>
+</html>
