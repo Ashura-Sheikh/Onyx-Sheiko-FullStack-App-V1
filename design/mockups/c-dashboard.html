@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup C: Dashboard + focus · Onyx Sheiko</title>
+  <!-- Mockup only: Tailwind's in-browser build, pinned with an integrity hash. The real app ships built CSS. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js"
+          integrity="sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB"
+          crossorigin="anonymous"></script>
+  <style type="text/tailwindcss">
+    @custom-variant dark (&:where(.dark, .dark *));
+  </style>
+  <script src="data.js"></script>
+  <script src="shared.js"></script>
+</head>
+<body class="min-h-screen bg-stone-50 text-[15px] text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+  <div id="app"></div>
+
+  <script>
+    document.body.insertAdjacentHTML("beforeend", PALETTE_HTML)
+    let screen = { name: "home" }
+
+    function topBar(back) {
+      return `
+        <header class="mx-auto flex max-w-5xl items-center gap-3 px-6 py-5">
+          ${back ? `<button id="back" class="rounded-full px-3 py-1.5 text-stone-500 hover:bg-stone-200 dark:hover:bg-stone-800">← Home</button>` : `<span class="text-lg font-semibold tracking-tight">Onyx</span><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">C · Dashboard + focus</span>`}
+          <button data-palette-open class="ml-auto rounded-full border border-stone-300 px-4 py-1.5 text-stone-500 hover:border-stone-400 dark:border-stone-700">Find anything <kbd class="ml-2 text-[10px]">⌘K</kbd></button>
+          <button data-theme-toggle class="rounded-full px-2.5 py-1.5 hover:bg-stone-200 dark:hover:bg-stone-800" aria-label="Toggle theme">◐</button>
+        </header>`
+    }
+
+    function taskRow(t) {
+      return `
+        <li class="flex items-center gap-3 py-2.5">
+          <span class="h-2 w-2 shrink-0 rounded-full ${t.priority === "high" ? "bg-rose-500" : t.priority === "normal" ? "bg-sky-500" : "bg-stone-400"}"></span>
+          <button data-task="${t.id}" class="min-w-0 flex-1 truncate text-left hover:underline">${esc(t.title)}</button>
+          ${pill(MOCK.stageLabels[t.status], STAGE_CLASSES[t.status])}
+        </li>`
+    }
+
+    function home() {
+      const dueToday = MOCK.tasks.filter((t) => t.status !== "done" && t.due <= MOCK.today)
+      const waiting = MOCK.tasks.filter((t) => t.status === "in-review")
+      const recent = Object.entries(MOCK.notes).sort((a, b) => b[1].updated.localeCompare(a[1].updated)).slice(0, 5)
+      const counts = MOCK.stages.map((s) => [s, MOCK.tasks.filter((t) => t.status === s).length])
+      return `
+        ${topBar(false)}
+        <main class="mx-auto max-w-5xl px-6 pb-16">
+          <h1 class="mb-1 text-3xl font-semibold tracking-tight">Good morning</h1>
+          <p class="mb-8 text-stone-500">Wednesday 16 April · ${dueToday.length} tasks due · ${waiting.length} waiting for your sign-off</p>
+
+          <div class="mb-6 grid grid-cols-4 gap-3">${counts.map(([s, n]) => `
+            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-800">
+              <div class="text-2xl font-semibold">${n}</div><div class="text-xs text-stone-500">${esc(MOCK.stageLabels[s])}</div></div>`).join("")}
+          </div>
+
+          <div class="grid grid-cols-3 gap-5">
+            <section class="col-span-2 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-800">
+              <h2 class="mb-2 font-semibold">Due today or overdue</h2>
+              <ul class="divide-y divide-stone-200 dark:divide-stone-800">${dueToday.map(taskRow).join("") || '<li class="py-3 text-stone-500">All clear.</li>'}</ul>
+              <h2 class="mt-6 mb-2 font-semibold">Waiting for your sign-off</h2>
+              <ul class="divide-y divide-stone-200 dark:divide-stone-800">${waiting.map(taskRow).join("") || '<li class="py-3 text-stone-500">Nothing waiting.</li>'}</ul>
+            </section>
+            <section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-800">
+              <h2 class="mb-2 font-semibold">Recent notes</h2>
+              <ul class="space-y-3">${recent.map(([id, n]) => `
+                <li><button data-note="${esc(id)}" class="text-left hover:underline">${esc(n.title)}</button><div class="text-xs text-stone-500">${esc(n.folder)} · ${esc(n.updated.slice(5))}</div></li>`).join("")}
+              </ul>
+              <button class="mt-5 w-full rounded-full bg-stone-900 py-2 text-white hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900">New note</button>
+            </section>
+          </div>
+        </main>`
+    }
+
+    function focusNote(id) {
+      const n = MOCK.notes[id]
+      return `
+        ${topBar(true)}
+        <main class="mx-auto max-w-2xl px-6 pb-24">
+          <div class="mb-2 text-sm text-stone-500">${esc(n.folder)} · updated ${esc(n.updated)}</div>
+          <h1 class="mb-6 font-serif text-4xl tracking-tight">${esc(n.title)}</h1>
+          <article class="font-serif text-lg leading-8">${renderBody(n.body)}</article>
+          <div class="mt-10 flex flex-wrap gap-1.5">${n.tags.map((t) => pill("#" + t, PRIORITY_CLASSES.low)).join("")}</div>
+        </main>`
+    }
+
+    function focusTask(id) {
+      const t = MOCK.tasks.find((x) => x.id === id)
+      const next = nextStage(t.status)
+      return `
+        ${topBar(true)}
+        <main class="mx-auto max-w-2xl px-6 pb-24">
+          <div class="mb-2 text-sm text-stone-500">${esc(t.project)} · due ${esc(t.due)}</div>
+          <h1 class="mb-4 text-3xl font-semibold tracking-tight">${esc(t.title)}</h1>
+          <div class="mb-8 flex gap-1.5">${pill(MOCK.stageLabels[t.status], STAGE_CLASSES[t.status])}${pill(t.priority, PRIORITY_CLASSES[t.priority])}</div>
+          ${next ? `<button id="advance" class="mb-10 rounded-full bg-emerald-600 px-5 py-2 text-white hover:bg-emerald-500">${next === "done" ? "Sign off and close" : "Move to " + esc(MOCK.stageLabels[next])}</button>` : '<p class="mb-10 text-emerald-700 dark:text-emerald-400">Signed off and done.</p>'}
+          <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-stone-500">Status history</h2>
+          <ol class="space-y-2 border-l-2 border-stone-200 pl-4 dark:border-stone-800">${t.history.map((h) => `<li>${esc(h)}</li>`).join("")}</ol>
+        </main>`
+    }
+
+    function render() {
+      const app = document.getElementById("app")
+      app.innerHTML = screen.name === "home" ? home() : screen.name === "note" ? focusNote(screen.id) : focusTask(screen.id)
+      app.querySelectorAll("[data-note]").forEach((b) => b.addEventListener("click", () => go({ name: "note", id: b.dataset.note })))
+      app.querySelectorAll("[data-task]").forEach((b) => b.addEventListener("click", () => go({ name: "task", id: Number(b.dataset.task) })))
+      app.querySelectorAll(".wikilink").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const id = noteIdByTitle(a.dataset.title); if (id) go({ name: "note", id }) }))
+      const back = document.getElementById("back"); if (back) back.addEventListener("click", () => go({ name: "home" }))
+      const adv = document.getElementById("advance"); if (adv) adv.addEventListener("click", () => { advanceTask(screen.id); render() })
+      document.querySelectorAll("[data-theme-toggle]").forEach((b) => b.addEventListener("click", () => document.documentElement.classList.toggle("dark")))
+      document.querySelectorAll("[data-palette-open]").forEach((b) => b.addEventListener("click", () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))))
+    }
+    function go(s) { screen = s; render(); window.scrollTo(0, 0) }
+
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.classList.add("dark")
+    initPalette((item) => go(item.kind === "Note" ? { name: "note", id: item.id } : { name: "task", id: item.id }))
+    render()
+  </script>
+</body>
+</html>

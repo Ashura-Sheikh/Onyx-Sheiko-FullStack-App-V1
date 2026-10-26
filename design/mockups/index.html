@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design mockups · Onyx Sheiko</title>
+  <!-- Mockup only: Tailwind's in-browser build, pinned with an integrity hash. The real app ships built CSS. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3/dist/index.global.js"
+          integrity="sha384-2ql948lIdLcGEE0/qxNiudyTjgauA3RDJERu5xW75kFCvSl5a9odyQYCb6tEjnmB"
+          crossorigin="anonymous"></script>
+</head>
+<body class="min-h-screen bg-zinc-50 p-10 text-zinc-900">
+  <main class="mx-auto max-w-4xl">
+    <h1 class="mb-2 text-3xl font-semibold tracking-tight">Onyx Sheiko: three design directions</h1>
+    <p class="mb-8 text-zinc-600">Clickable mockups for issue #6. All three use the same made-up data, so they compare fairly. Try ⌘K (or Ctrl+K), the ◐ theme toggle, opening notes and wikilinks, and moving a task forward a stage.</p>
+    <div class="grid gap-5 sm:grid-cols-3">
+      <a href="a-workspace.html" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 hover:ring-violet-400">
+        <div class="mb-2 text-sm font-medium text-violet-700">A</div>
+        <h2 class="mb-2 font-semibold">Workspace</h2>
+        <p class="text-sm text-zinc-600">Three panes: note tree, editor, a details panel with backlinks and related tasks. Dense and keyboard-first.</p>
+      </a>
+      <a href="b-board.html" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 hover:ring-amber-400">
+        <div class="mb-2 text-sm font-medium text-amber-700">B</div>
+        <h2 class="mb-2 font-semibold">Board-first</h2>
+        <p class="text-sm text-zinc-600">Tasks as a board by stage, with a list toggle and project filter. Notes and task details open in a slide-over.</p>
+      </a>
+      <a href="c-dashboard.html" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 hover:ring-emerald-400">
+        <div class="mb-2 text-sm font-medium text-emerald-700">C</div>
+        <h2 class="mb-2 font-semibold">Dashboard + focus</h2>
+        <p class="text-sm text-zinc-600">A calm home screen: due today, waiting for sign-off, recent notes. Anything opens full-width with no distractions.</p>
+      </a>
+    </div>
+    <p class="mt-8 text-xs text-zinc-500">Mockups only. They load Tailwind's in-browser build from a CDN, pinned to 4.3.3 with an integrity hash; the real app will ship a built CSS file under a strict Content Security Policy. Nothing is saved: changes reset on reload.</p>
+  </main>
+</body>
+</html>
