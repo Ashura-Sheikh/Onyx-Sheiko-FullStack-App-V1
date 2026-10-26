@@ -37,6 +37,8 @@ class Settings:
     session_ttl: int = SESSION_TTL_SECONDS
     max_body_bytes: int = MAX_BODY_BYTES
     allowed_hosts: tuple[str, ...] = field(default=ALLOWED_HOSTS)
+    # None = the user's cache folder (see onyx/cache.py); ONYX_CACHE_DIR overrides it.
+    cache_dir: Path | None = None
 
     @property
     def allowed_origins(self) -> frozenset[str]:
