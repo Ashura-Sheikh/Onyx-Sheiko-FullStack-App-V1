@@ -23,6 +23,10 @@ A local, security-first web app for working with Markdown notes and tasks in an 
 
 Security comes first. The design and its tests are in [`docs/threat-model.md`](docs/threat-model.md); how to report a problem is in [`SECURITY.md`](SECURITY.md).
 
+## Releases
+
+How releases are made, and the gate each one passes before it's published: [`docs/releasing.md`](docs/releasing.md).
+
 ## Repository layout
 
 ```
