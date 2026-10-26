@@ -1,0 +1,36 @@
+[project]
+name = "onyx-sheiko-backend"
+version = "0.0.0"
+description = "FastAPI backend for Onyx Sheiko, a local, security-first notes and tasks app"
+readme = "../README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.uv]
+# A plain app, not an installable package.
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# E/F: errors; I: import order; B: likely bugs; S: security (Bandit rules); UP: modern syntax
+select = ["E", "F", "I", "B", "S", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is how pytest checks things
+"tests/*" = ["S101"]

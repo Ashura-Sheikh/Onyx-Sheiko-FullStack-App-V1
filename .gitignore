@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+requirements-audit.txt
+
+# Node
+node_modules/
+dist/
+*.log
+
+# The app's SQLite cache. It holds note content, so it must never be
+# committed. The app stores it in a per-user cache folder outside the repo;
+# these patterns are a second line of defence.
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Obsidian settings, if a vault is opened on this folder
+.obsidian/
