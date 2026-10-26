@@ -6,8 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from onyx.auth import SESSION_COOKIE, AuthState
+from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
 from onyx.security import ApiGuard, BodySizeLimit, SecurityHeaders, session_from_scope
+from onyx.vault import Vault
 
 
 class LaunchCode(BaseModel):
@@ -17,12 +19,18 @@ class LaunchCode(BaseModel):
 
 def create_app(settings: Settings) -> FastAPI:
     auth = AuthState(settings.launch_code_ttl, settings.session_ttl)
+    vault = Vault(settings.vault)
+    # The cache is rebuilt from the files on every start (threat model T10).
+    cache = NoteCache(vault, settings.cache_dir or default_cache_dir())
+    cache.rebuild()
 
     # No interactive docs: they load scripts from a CDN, which the CSP forbids,
     # and the schema is generated at build time instead of being served.
     app = FastAPI(title="Onyx Sheiko", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     app.state.auth = auth
+    app.state.vault = vault
+    app.state.cache = cache
 
     @app.post("/api/session", status_code=204)
     def sign_in(body: LaunchCode) -> Response:

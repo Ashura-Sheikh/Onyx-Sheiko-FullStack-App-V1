@@ -11,6 +11,7 @@ import sys
 import uvicorn
 
 from onyx.app import create_app
+from onyx.cache import CacheLocationError
 from onyx.config import DEFAULT_PORT, HOST, ConfigError, Settings, load_settings
 
 
@@ -33,12 +34,17 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as error:
         print(f"onyx: {error}", file=sys.stderr)
         return 2
-    app = create_app(settings)
+    try:
+        app = create_app(settings)
+    except CacheLocationError as error:
+        print(f"onyx: {error}", file=sys.stderr)
+        return 2
     minutes = settings.launch_code_ttl // 60
     # flush=True: when output isn't a terminal (an IDE task, a pipe), Python
     # buffers it, and the code wouldn't appear until the server stopped.
     print(f"Onyx Sheiko: http://{HOST}:{settings.port}", flush=True)
     print(f"Vault: {settings.vault}", flush=True)
+    print(f"Cache: {app.state.cache.path}", flush=True)
     print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}", flush=True)
     uvicorn.Server(uvicorn_config(app, settings)).run()
     return 0

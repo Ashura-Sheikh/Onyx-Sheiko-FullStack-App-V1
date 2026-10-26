@@ -66,6 +66,7 @@ It prints the address (`http://127.0.0.1:8731`) and a **one-time launch code**, 
 - The server only ever listens on `127.0.0.1`; there's no option to change that.
 - It refuses to start without a vault folder, so it can't fall back to a default one.
 - Use `dev-vault/` (made-up data) for development. Connecting a real vault is a separate, later step.
+- A search cache is rebuilt from the notes on every start, in your cache folder (`~/Library/Caches/onyx-sheiko` on macOS, `~/.cache/onyx-sheiko` elsewhere, or `ONYX_CACHE_DIR`). It's private to your user, never inside the vault or the repo, and always safe to delete.
 
 Until the frontend lands, you can try the API with `curl`. Every `/api` request needs the header `X-Onyx-Request: 1`:
 
