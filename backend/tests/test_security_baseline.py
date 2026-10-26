@@ -284,7 +284,7 @@ def test_invalid_sign_in_body_is_refused(client, body):
 
 
 @pytest.mark.parametrize(
-    ("path", "status"), [("/api/health", 401), ("/api/session", 200), ("/missing", 404)]
+    ("path", "status"), [("/api/health", 401), ("/api/session", 200), ("/api/missing", 401)]
 )
 def test_security_headers_on_every_response(client, path, status):
     response = client.get(path, headers=OK)
@@ -308,8 +308,12 @@ def test_api_responses_are_not_cached(client):
 
 
 def test_interactive_docs_are_disabled(client):
+    """/docs and friends fall through to the app's own page, never Swagger."""
     for path in ("/docs", "/redoc", "/openapi.json"):
-        assert client.get(path).status_code == 404
+        body = client.get(path).text.lower()
+        assert "swagger" not in body
+        assert "redoc" not in body
+        assert '"openapi"' not in body
 
 
 # --- T9: no secrets in logs --------------------------------------------------------

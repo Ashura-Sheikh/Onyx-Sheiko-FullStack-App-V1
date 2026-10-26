@@ -54,21 +54,30 @@ npm test
 npm run build
 ```
 
-### Running the server
+### Running the app
 
 ```bash
-cd backend
+# 1. Build the frontend (again after frontend changes)
+cd frontend
+npm ci
+npm run build
+
+# 2. Start the server
+cd ../backend
 uv run python -m onyx --vault ../dev-vault
 ```
 
-It prints the address (`http://127.0.0.1:8731`) and a **one-time launch code**, valid for 10 minutes. The sign-in page (coming with the frontend, #7) asks for that code, which then becomes a session cookie for 12 hours, or until the server stops. You can also set the vault with `ONYX_VAULT` and the port with `--port`.
+The server prints the address (`http://127.0.0.1:8731`) and a **one-time launch code**, valid for 10 minutes. Open the address, type the code on the sign-in page, and it becomes a session cookie for 12 hours, or until the server stops. You can also set the vault with `ONYX_VAULT` and the port with `--port`.
 
 - The server only ever listens on `127.0.0.1`; there's no option to change that.
 - It refuses to start without a vault folder, so it can't fall back to a default one.
 - Use `dev-vault/` (made-up data) for development. Connecting a real vault is a separate, later step.
 - A search cache is rebuilt from the notes on every start, in your cache folder (`~/Library/Caches/onyx-sheiko` on macOS, `~/.cache/onyx-sheiko` elsewhere, or `ONYX_CACHE_DIR`). It's private to your user, never inside the vault or the repo, and always safe to delete.
+- The page is served with a strict Content Security Policy and a fresh nonce on every load (see `docs/threat-model.md`, T6).
 
-Until the frontend lands, you can try the API with `curl`. Every `/api` request needs the header `X-Onyx-Request: 1`:
+**Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
+
+**Trying the API directly:** every `/api` request needs the header `X-Onyx-Request: 1`:
 
 ```bash
 curl -c "$TMPDIR/onyx-cookies.txt" -H 'X-Onyx-Request: 1' -H 'Content-Type: application/json' \

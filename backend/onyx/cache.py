@@ -22,11 +22,11 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
+from onyx.config import REPO_ROOT
 from onyx.vault import Vault
 
 APP_FOLDER = "onyx-sheiko"
 SCHEMA_VERSION = 1
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class CacheLocationError(ValueError):
