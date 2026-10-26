@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Python dependencies in backend/pyproject.toml and backend/uv.lock
+  - package-ecosystem: "uv"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Frontend packages in frontend/package.json and package-lock.json
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      # @types/node must match the Node version we run (24, see frontend/.nvmrc).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # Actions in .github/workflows/ (pinned to SHAs; Dependabot updates SHA and comment)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
