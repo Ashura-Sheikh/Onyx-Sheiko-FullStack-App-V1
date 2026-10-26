@@ -238,3 +238,21 @@ def test_writes_into_hidden_or_outside_places_are_refused(setup):
             vault.create(name, "planted")
     assert not (outside / "new.md").exists()
     assert not (root / ".git" / "hooks").exists()
+
+
+def test_dot_segments_are_refused_by_their_own_rule(setup):
+    """'..' and '.' also start with '.', so the hidden-file rule would catch
+    them too; check the dedicated rule works on its own."""
+    vault, _, _ = setup
+    for name in ("Projects/../Atlas.md", "./Atlas.md", "Projects/./Atlas.md"):
+        with pytest.raises(PathRejected, match=r"'\.' or '\.\.'"):
+            vault.resolve(name)
+
+
+def test_symlinked_folders_are_not_followed_when_listing(setup):
+    """A link to a folder inside the vault would otherwise list its notes twice,
+    and a link loop would never end."""
+    vault, root, _ = setup
+    (root / "Alias").symlink_to(root / "Projects", target_is_directory=True)
+    (root / "Projects" / "Loop").symlink_to(root, target_is_directory=True)
+    assert vault.list_notes() == ["Projects/Atlas.md", "Unicode — ✓ é 字.md"]
