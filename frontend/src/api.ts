@@ -8,7 +8,11 @@ import type {
   Item,
   LaunchCode,
   NoteDetail,
+  NoteSaved,
+  NoteSource,
   NoteSummary,
+  SaveConflict,
+  SaveNote,
   SearchResult,
   TaskSummary,
 } from './api-types'
@@ -17,11 +21,14 @@ export const CSRF_HEADER = 'X-Onyx-Request'
 
 export class ApiError extends Error {
   readonly status: number
+  /** The parsed JSON error body, if there was one (a 409 carries the note's version). */
+  readonly body: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -36,13 +43,15 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const response = await fetch(path, { ...init, headers, credentials: 'same-origin' })
   if (!response.ok) {
     let message = response.statusText
+    let body: unknown
     try {
-      const body = (await response.json()) as { detail?: unknown }
-      if (typeof body.detail === 'string') message = body.detail
+      body = await response.json()
+      const detail = (body as { detail?: unknown }).detail
+      if (typeof detail === 'string') message = detail
     } catch {
       // not JSON; keep the status text
     }
-    throw new ApiError(response.status, message)
+    throw new ApiError(response.status, message, body)
   }
   return response
 }
@@ -80,7 +89,7 @@ export async function signOut(): Promise<void> {
 
 export type Stage = NonNullable<TaskSummary['status']>
 export type Priority = NonNullable<TaskSummary['priority']>
-export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSummary, SearchResult, TaskSummary }
+export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSaved, NoteSource, NoteSummary, SaveConflict, SearchResult, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
   return apiGet('/api/home')
@@ -104,6 +113,21 @@ export async function getNotes(): Promise<NoteSummary[]> {
 
 export async function getNote(path: string): Promise<NoteDetail> {
   return apiGet('/api/note', { path })
+}
+
+/** A note's body as written, for the editor, with its frontmatter (shown, not edited) and version. */
+export async function getNoteSource(path: string): Promise<NoteSource> {
+  return apiGet('/api/note/source', { path })
+}
+
+/**
+ * Save a note's body. `version` is the one the editor opened: if the file
+ * changed on disk since, the server refuses with a 409 and nothing is written.
+ */
+export async function saveNote(path: string, body: string, version: string): Promise<NoteSaved> {
+  const request: SaveNote = { path, body, version }
+  const response = await apiFetch('/api/note', { method: 'PUT', body: JSON.stringify(request) })
+  return (await response.json()) as NoteSaved
 }
 
 /** The address of the Notes page, optionally showing one folder, one tag or a search. */
