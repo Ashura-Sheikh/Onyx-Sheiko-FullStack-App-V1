@@ -19,7 +19,7 @@ from the listing (threat model T5).
 """
 
 from onyx import frontmatter
-from onyx.vault import Note, NoteNotFound, PathRejected, Vault, VersionConflict
+from onyx.vault import Note, NoteNotFound, PathRejected, Vault
 
 
 def _listed(vault: Vault, requested: str) -> str:
@@ -69,10 +69,10 @@ def save_body(vault: Vault, requested: str, body: str, version: str) -> Note:
         current = vault.read(name)
     except (PathRejected, UnicodeDecodeError) as error:
         raise NoteNotFound(requested) from error
-    if current.version != version:
-        raise VersionConflict(name)
     head, _ = frontmatter.split_raw(current.text)
-    # update() checks the version again, just before it replaces the file.
+    # update() refuses unless the file on disk is still `version`, checked just
+    # before it replaces the file; if `current` was already a different
+    # version, the new text is never written.
     return vault.update(name, head + with_line_endings_of(body, current.text), version)
 
 
