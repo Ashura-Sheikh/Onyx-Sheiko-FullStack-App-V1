@@ -24,6 +24,10 @@ PRIORITIES = ("high", "normal", "low")
 RECENT_NOTES = 5
 HISTORY_ENTRIES = 10
 MAX_TITLE_CHARS = 300
+MAX_TAGS = 50
+# Sections shown elsewhere (History panel) or not yet a feature (Context),
+# so they're left out of the body the focus view renders.
+HIDDEN_SECTIONS = ("Status History", "Context")
 
 _HISTORY_LINE = re.compile(r"^-\s+(\S+)\s+—\s+(\S+)\s+→\s+(\S+)(?:\s+\((.{0,200})\))?\s*$")
 
@@ -210,3 +214,79 @@ def _task_json(task: Task) -> dict:
         "priority": task.priority,
         "due": task.due.isoformat() if task.due else None,
     }
+
+
+def _strings(value: object, limit: int = MAX_TAGS) -> list[str]:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    found = [text for item in value if (text := _text(item))]
+    return found[:limit]
+
+
+def _unlink(text: str) -> str:
+    """ "[[Atlas architecture]]" or "[[Atlas architecture|Atlas]]" → the visible text."""
+    if text.startswith("[[") and text.endswith("]]"):
+        inner = text[2:-2]
+        return inner.split("|", 1)[-1] if "|" in inner else inner
+    return text
+
+
+def _minutes(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and 0 <= value < 10**9:
+        return value
+    return None
+
+
+def note_detail(vault: Vault, requested: str) -> dict | None:
+    """One note or task for the focus view, or None if there's no such note.
+
+    The requested name is only used to look up an entry in the vault's own
+    listing; the name that is opened always comes from that listing, never
+    from the request (threat model T5)."""
+    listed = {name: name for name in vault.list_notes()}
+    name = listed.get(requested)
+    if name is None:
+        return None
+    try:
+        note = vault.read(name)
+        modified = vault.modified(name)
+    except (NoteNotFound, PathRejected, UnicodeDecodeError):
+        return None
+    meta, body = frontmatter.split(note.text)
+    title = _title(meta, body, note.path)
+    folder = str(PurePosixPath(note.path).parent)
+    shown = frontmatter.without_first_heading(
+        frontmatter.without_sections(body, HIDDEN_SECTIONS), title
+    ).strip("\n")
+    detail = {
+        "path": note.path,
+        "title": title,
+        "folder": "" if folder == "." else folder,
+        "kind": "task" if _is_task(meta) else "note",
+        "updated": (_as_datetime(meta.get("dateModified")) or modified).isoformat(),
+        "tags": [t for t in _strings(meta.get("tags")) if t != "task"],
+        "body": shown,
+        "task": None,
+    }
+    if detail["kind"] == "task":
+        created = _as_datetime(meta.get("dateCreated"))
+        completed = _as_datetime(meta.get("completedDate"))
+        detail["task"] = {
+            "status": meta.get("status") if meta.get("status") in STAGES else None,
+            "priority": meta.get("priority") if meta.get("priority") in PRIORITIES else None,
+            "due": (due := _as_date(meta.get("due"))) and due.isoformat(),
+            "projects": [_unlink(p) for p in _strings(meta.get("projects"))],
+            "created": created.isoformat() if created else None,
+            "completed": completed.isoformat() if completed else None,
+            "closed_by": _text(meta.get("closedBy")),
+            "time_to_close_minutes": _minutes(meta.get("timeToCloseMinutes")),
+            "history": [
+                {"at": h.at.isoformat(), "from": h.from_stage, "to": h.to_stage, "remark": h.remark}
+                for h in _history(body, note.path, title)
+            ],
+        }
+    return detail

@@ -325,3 +325,145 @@ def test_today_option():
     assert parse_args(["--vault", str(DEV_VAULT)]).today is None
     with pytest.raises(ConfigError, match="--today"):
         parse_args(["--vault", str(DEV_VAULT), "--today", "16/04/2031"])
+
+
+# --- One note for the focus view -------------------------------------------------------
+
+
+def test_note_detail_for_a_note(tmp_path):
+    write(
+        tmp_path,
+        "Projects/Atlas.md",
+        "---\ntags: [atlas, design]\ndateModified: 2031-04-15T10:00:00Z\n---\n"
+        "\n# Atlas\n\nBody text.\n",
+    )
+    detail = summary.note_detail(Vault(tmp_path), "Projects/Atlas.md")
+    assert detail == {
+        "path": "Projects/Atlas.md",
+        "title": "Atlas",
+        "folder": "Projects",
+        "kind": "note",
+        "updated": "2031-04-15T10:00:00+00:00",
+        "tags": ["atlas", "design"],
+        "body": "Body text.",
+        "task": None,
+    }
+
+
+def test_note_detail_for_a_task(tmp_path):
+    extra = (
+        'projects:\n  - "[[Atlas architecture]]"\n  - "[[Harbor|Harbor project]]"\n  - Plain\n'
+        "dateCreated: 2031-04-13T11:00:00Z\ncompletedDate: 2031-04-13T12:30:00Z\n"
+        "closedBy: owner\ntimeToCloseMinutes: 90\n"
+    )
+    history = (
+        "- 2031-04-13T11:00:00Z — created → open\n"
+        "- 2031-04-13T12:30:00Z — open → done (signed off)\n"
+    )
+    text = task(status="done", priority="high", extra=extra, history=history)
+    text = text.replace("# A task\n\n", "# A task\n\nWhat this task is about.\n\n")
+    text += "\n## Context\n\n- 2031-04-13T11:05:00Z — owner: started\n\n## Notes\n\nKept.\n"
+    write(tmp_path, "t.md", text)
+    detail = summary.note_detail(Vault(tmp_path), "t.md")
+    assert detail["kind"] == "task"
+    assert detail["tags"] == []  # "task" itself isn't shown
+    assert detail["body"] == "What this task is about.\n\n## Notes\n\nKept."
+    assert detail["task"] == {
+        "status": "done",
+        "priority": "high",
+        "due": "2031-04-16",
+        "projects": ["Atlas architecture", "Harbor project", "Plain"],
+        "created": "2031-04-13T11:00:00+00:00",
+        "completed": "2031-04-13T12:30:00+00:00",
+        "closed_by": "owner",
+        "time_to_close_minutes": 90,
+        "history": [
+            {"at": "2031-04-13T11:00:00+00:00", "from": "created", "to": "open", "remark": None},
+            {
+                "at": "2031-04-13T12:30:00+00:00",
+                "from": "open",
+                "to": "done",
+                "remark": "signed off",
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize("minutes", ['"90"', "-5", "true", "1.5", "[1]"])
+def test_bad_time_to_close_is_dropped(tmp_path, minutes):
+    write(tmp_path, "t.md", task(extra=f"timeToCloseMinutes: {minutes}\n"))
+    assert summary.note_detail(Vault(tmp_path), "t.md")["task"]["time_to_close_minutes"] is None
+
+
+def test_tags_must_be_text_and_are_limited(tmp_path):
+    tags = "\n".join(f"  - t{n}" for n in range(80))
+    write(tmp_path, "a.md", f"---\ntags:\n{tags}\n  - 5\n  - [nested]\n---\n")
+    detail = summary.note_detail(Vault(tmp_path), "a.md")
+    assert len(detail["tags"]) == summary.MAX_TAGS
+    assert all(isinstance(t, str) for t in detail["tags"])
+
+
+def test_heading_is_kept_when_it_is_not_the_title(tmp_path):
+    write(tmp_path, "a.md", "---\ntitle: Other\n---\n# Heading\n\nText\n")
+    assert summary.note_detail(Vault(tmp_path), "a.md")["body"] == "# Heading\n\nText"
+
+
+def test_hidden_sections_at_any_level_are_removed():
+    body = "Intro\n### Status History\n- x\n#### deeper\n- y\n### Next\nKept\n"
+    assert frontmatter.without_sections(body, ("Status History",)) == "Intro\n### Next\nKept\n"
+
+
+@pytest.mark.parametrize(
+    "requested",
+    [
+        "../outside.md",
+        "/etc/passwd",
+        ".hidden.md",
+        "Missing.md",
+        "folder",
+        "a.md/../a.md",
+        "A.MD",
+        "a.md\x00",
+        "",
+    ],
+)
+def test_only_listed_notes_can_be_opened(tmp_path, requested):
+    (tmp_path / "vault").mkdir()
+    write(tmp_path / "vault", "a.md", "# A\n")
+    write(tmp_path / "vault", ".hidden.md", "# Hidden\n")
+    (tmp_path / "vault" / "folder").mkdir()
+    write(tmp_path, "outside.md", "# Outside\n")
+    assert summary.note_detail(Vault(tmp_path / "vault"), requested) is None
+
+
+def test_a_symlink_out_of_the_vault_cannot_be_opened(tmp_path):
+    (tmp_path / "vault").mkdir()
+    write(tmp_path, "secret.md", "# Secret\n")
+    (tmp_path / "vault" / "link.md").symlink_to(tmp_path / "secret.md")
+    assert summary.note_detail(Vault(tmp_path / "vault"), "link.md") is None
+
+
+def test_note_endpoint(app):
+    client = TestClient(app, base_url=BASE)
+    url = "/api/note?path=Projects/Atlas%20kickoff.md"
+    assert client.get(url, headers=OK).status_code == 401
+    session = sign_in(client, app)
+    body = client.get(url, headers=with_session(session)).json()
+    assert body["title"] == "Atlas kickoff"
+    assert body["kind"] == "note"
+    missing = client.get("/api/note?path=..%2FREADME.md", headers=with_session(session))
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Note not found"}
+    assert client.get("/api/note", headers=with_session(session)).status_code == 422
+    long = "a" * 513 + ".md"
+    assert client.get(f"/api/note?path={long}", headers=with_session(session)).status_code == 422
+
+
+def test_dev_vault_task_detail(app):
+    client = TestClient(app, base_url=BASE)
+    session = sign_in(client, app)
+    url = "/api/note?path=Tasks/Review%20cache%20rebuild%20design.md"
+    body = client.get(url, headers=with_session(session)).json()
+    assert body["task"]["status"] == "in-review"
+    assert body["task"]["projects"] == ["Atlas architecture"]
+    assert len(body["task"]["history"]) == 3

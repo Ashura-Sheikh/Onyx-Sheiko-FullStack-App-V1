@@ -70,3 +70,36 @@ def section(body: str, title: str) -> list[str]:
             found.append(following.rstrip("\r"))
         return found
     return []
+
+
+def without_sections(body: str, titles: tuple[str, ...]) -> str:
+    """The body with each heading in `titles` removed, along with everything
+    under it up to the next heading of the same or a higher level."""
+    kept: list[str] = []
+    skip_level: int | None = None
+    for line in body.split("\n"):
+        match = _HEADING.match(line.rstrip("\r"))
+        if match:
+            level = len(match.group(1))
+            if skip_level is not None and level <= skip_level:
+                skip_level = None
+            if skip_level is None and match.group(2) in titles:
+                skip_level = level
+                continue
+        if skip_level is None:
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def without_first_heading(body: str, title: str) -> str:
+    """Drop the first level-1 heading if it is just the title, which the
+    page shows on its own."""
+    lines = body.split("\n")
+    for index, line in enumerate(lines):
+        if line.strip() == "":
+            continue
+        match = _HEADING.match(line.rstrip("\r"))
+        if match and len(match.group(1)) == 1 and match.group(2) == title:
+            return "\n".join(lines[index + 1 :])
+        return body
+    return body

@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -78,6 +78,13 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/items")
     def items() -> dict:
         return {"items": summary.items(summary.read_summary(vault))}
+
+    @app.get("/api/note")
+    def note(path: str = Query(min_length=1, max_length=512)) -> dict:
+        detail = summary.note_detail(vault, path)
+        if detail is None:
+            return JSONResponse({"detail": "Note not found"}, status_code=404)
+        return detail
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
