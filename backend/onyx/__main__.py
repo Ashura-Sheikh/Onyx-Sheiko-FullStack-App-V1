@@ -1,4 +1,4 @@
-"""Start the server:  uv run python -m onyx --vault ../dev-vault
+"""Start the server:  uv run python -m onyx --vault ../dev-vault --today 2031-04-16
 
 Prints the address and a one-time launch code in this terminal. The code is
 never logged and never put in a URL; type it into the sign-in page.
@@ -19,8 +19,11 @@ def parse_args(argv: list[str] | None = None) -> Settings:
     parser = argparse.ArgumentParser(prog="python -m onyx", description="Run Onyx Sheiko locally.")
     parser.add_argument("--vault", default=os.environ.get("ONYX_VAULT"), help="vault folder")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument(
+        "--today", help="treat this date (YYYY-MM-DD) as today; for the made-up dev-vault"
+    )
     args = parser.parse_args(argv)
-    return load_settings(args.vault, args.port)
+    return load_settings(args.vault, args.port, args.today)
 
 
 def uvicorn_config(app, settings: Settings) -> uvicorn.Config:
@@ -45,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Onyx Sheiko: http://{HOST}:{settings.port}", flush=True)
     print(f"Vault: {settings.vault}", flush=True)
     print(f"Cache: {app.state.cache.path}", flush=True)
+    if settings.today is not None:
+        print(f"Today (fixed with --today): {settings.today.isoformat()}", flush=True)
     print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}", flush=True)
     uvicorn.Server(uvicorn_config(app, settings)).run()
     return 0

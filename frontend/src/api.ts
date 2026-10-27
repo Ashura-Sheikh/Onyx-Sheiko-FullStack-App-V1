@@ -48,3 +48,45 @@ export async function signIn(code: string): Promise<void> {
 export async function signOut(): Promise<void> {
   await apiFetch('/api/session', { method: 'DELETE' })
 }
+
+// --- Home and the ⌘K palette (read-only) -------------------------------------
+
+export type Stage = 'open' | 'in-progress' | 'in-review' | 'done'
+export type Priority = 'high' | 'normal' | 'low'
+
+export type TaskSummary = {
+  path: string
+  title: string
+  status: Stage | null
+  priority: Priority | null
+  due: string | null
+}
+
+export type HistoryEntry = {
+  at: string
+  path: string
+  title: string
+  from: string
+  to: Stage
+  remark: string | null
+}
+
+export type HomeData = {
+  today: string
+  counts: Record<Stage, number>
+  due: TaskSummary[]
+  waiting: TaskSummary[]
+  recent_notes: { path: string; title: string; folder: string; updated: string }[]
+  history: HistoryEntry[]
+}
+
+export type Item = { kind: 'note' | 'task'; path: string; title: string }
+
+export async function getHome(): Promise<HomeData> {
+  return (await (await apiFetch('/api/home')).json()) as HomeData
+}
+
+export async function getItems(): Promise<Item[]> {
+  const body = (await (await apiFetch('/api/items')).json()) as { items: Item[] }
+  return body.items
+}

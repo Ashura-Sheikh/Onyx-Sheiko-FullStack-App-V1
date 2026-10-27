@@ -64,7 +64,7 @@ npm run build
 
 # 2. Start the server
 cd ../backend
-uv run python -m onyx --vault ../dev-vault
+uv run python -m onyx --vault ../dev-vault --today 2031-04-16
 ```
 
 The server prints the address (`http://127.0.0.1:8731`) and a **one-time launch code**, valid for 10 minutes. Open the address, type the code on the sign-in page, and it becomes a session cookie for 12 hours, or until the server stops. You can also set the vault with `ONYX_VAULT` and the port with `--port`.
@@ -72,6 +72,7 @@ The server prints the address (`http://127.0.0.1:8731`) and a **one-time launch 
 - The server only ever listens on `127.0.0.1`; there's no option to change that.
 - It refuses to start without a vault folder, so it can't fall back to a default one.
 - Use `dev-vault/` (made-up data) for development. Connecting a real vault is a separate, later step.
+- `--today` fixes the date Home treats as today. The dev-vault's made-up dates are in April 2031, so without it nothing shows as due. Leave it out for a real vault.
 - A search cache is rebuilt from the notes on every start, in your cache folder (`~/Library/Caches/onyx-sheiko` on macOS, `~/.cache/onyx-sheiko` elsewhere, or `ONYX_CACHE_DIR`). It's private to your user, never inside the vault or the repo, and always safe to delete.
 - The page is served with a strict Content Security Policy and a fresh nonce on every load (see `docs/threat-model.md`, T6).
 

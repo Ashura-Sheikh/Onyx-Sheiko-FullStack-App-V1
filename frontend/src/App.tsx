@@ -1,17 +1,67 @@
-import { useEffect, useState } from 'react'
-import { getSession, signOut } from './api'
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useCallback, useEffect, useState } from 'react'
+import { BrowserRouter, Link, Route, Routes } from 'react-router'
+import { ApiError, getSession, signOut } from './api'
+import Frame from './Frame'
+import Home from './Home'
 import SignIn from './SignIn'
+import { applyTheme, initialTheme, saveTheme, type Theme } from './theme'
 
 type State = 'checking' | 'signed-out' | 'signed-in' | 'offline'
 
-// The app frame, Home, panels and features arrive in the next #7 pull requests.
+function NotFound() {
+  return (
+    <>
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight">Not here yet</h1>
+      <p className="text-stone-500">
+        This page doesn't exist yet.{' '}
+        <Link to="/" className="underline">
+          Back to Home
+        </Link>
+      </p>
+    </>
+  )
+}
+
 export default function App() {
   const [state, setState] = useState<State>('checking')
+  const [theme, setTheme] = useState<Theme>(initialTheme)
+  // One client per app: a 401 on any request means the session has ended.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        queryCache: new QueryCache({
+          onError: (error) => {
+            if (error instanceof ApiError && error.status === 401) setState('signed-out')
+          },
+        }),
+        defaultOptions: { queries: { retry: false, refetchOnWindowFocus: true } },
+      }),
+  )
+
+  useEffect(() => applyTheme(theme), [theme])
 
   useEffect(() => {
     getSession()
       .then((signedIn) => setState(signedIn ? 'signed-in' : 'signed-out'))
       .catch(() => setState('offline'))
+  }, [])
+
+  // Signed out: drop everything read from the vault from memory.
+  useEffect(() => {
+    if (state === 'signed-out') queryClient.clear()
+  }, [state, queryClient])
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark'
+      saveTheme(next)
+      return next
+    })
+  }, [])
+
+  const handleSignOut = useCallback(() => {
+    signOut().finally(() => setState('signed-out'))
   }, [])
 
   if (state === 'checking') {
@@ -28,16 +78,15 @@ export default function App() {
     return <SignIn onSignedIn={() => setState('signed-in')} />
   }
   return (
-    <main className="min-h-screen bg-stone-50 p-8 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight">Onyx Sheiko</h1>
-      <p className="mb-6 text-stone-500">You're signed in. Home and the panels come next.</p>
-      <button
-        type="button"
-        onClick={() => signOut().finally(() => setState('signed-out'))}
-        className="rounded-full border border-stone-300 px-4 py-1.5 hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
-      >
-        Sign out
-      </button>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Frame theme={theme} onToggleTheme={toggleTheme} onSignOut={handleSignOut}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Frame>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }

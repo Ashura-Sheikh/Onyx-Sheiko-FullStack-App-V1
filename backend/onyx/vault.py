@@ -24,6 +24,7 @@ import os
 import stat
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 NOTE_SUFFIX = ".md"
@@ -107,6 +108,15 @@ class Vault:
         except IsADirectoryError as error:
             raise PathRejected("That path is a folder, not a note.") from error
         return Note(path=self.relative(path), text=data.decode("utf-8"), version=version_of(data))
+
+    def modified(self, name: str) -> datetime:
+        """When the note's file last changed on disk (UTC)."""
+        path = self.resolve(name)
+        try:
+            seconds = path.stat().st_mtime
+        except FileNotFoundError as error:
+            raise NoteNotFound(name) from error
+        return datetime.fromtimestamp(seconds, tz=UTC)
 
     def list_notes(self) -> list[str]:
         """Every note in the vault, sorted. Hidden folders and symlinks that

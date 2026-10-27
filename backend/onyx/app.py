@@ -1,11 +1,13 @@
 """The FastAPI app. Build one with create_app(settings) per server run."""
 
+from datetime import date
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from onyx import config
+from onyx import config, summary
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
@@ -63,6 +65,19 @@ def create_app(settings: Settings) -> FastAPI:
         response = Response(status_code=204)
         response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="strict")
         return response
+
+    def today() -> date:
+        return settings.today or date.today()
+
+    # Read-only summaries. Each request reads the files again, so Home is never
+    # stale; the cache will take this over when the vault gets large.
+    @app.get("/api/home")
+    def home() -> dict:
+        return summary.home(summary.read_summary(vault), today())
+
+    @app.get("/api/items")
+    def items() -> dict:
+        return {"items": summary.items(summary.read_summary(vault))}
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
