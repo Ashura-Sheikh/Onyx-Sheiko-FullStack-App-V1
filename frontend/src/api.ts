@@ -90,3 +90,36 @@ export async function getItems(): Promise<Item[]> {
   const body = (await (await apiFetch('/api/items')).json()) as { items: Item[] }
   return body.items
 }
+
+// --- One note or task, for the focus view (read-only) -------------------------
+
+export type NoteDetail = {
+  path: string
+  title: string
+  folder: string
+  kind: 'note' | 'task'
+  updated: string
+  tags: string[]
+  body: string
+  task: null | {
+    status: Stage | null
+    priority: Priority | null
+    due: string | null
+    projects: string[]
+    created: string | null
+    completed: string | null
+    closed_by: string | null
+    time_to_close_minutes: number | null
+    history: Omit<HistoryEntry, 'path' | 'title'>[]
+  }
+}
+
+export async function getNote(path: string): Promise<NoteDetail> {
+  const response = await apiFetch(`/api/note?path=${encodeURIComponent(path)}`)
+  return (await response.json()) as NoteDetail
+}
+
+/** The address of the focus view for a note or task. */
+export function focusPath(path: string): string {
+  return `/focus?path=${encodeURIComponent(path)}`
+}

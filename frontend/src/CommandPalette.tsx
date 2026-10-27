@@ -8,7 +8,7 @@ export type Command = { id: string; label: string; run: () => void }
 
 type Option =
   | { kind: 'command'; key: string; label: string; run: () => void }
-  | { kind: 'note' | 'task'; key: string; label: string }
+  | { kind: 'note' | 'task'; key: string; label: string; path: string }
 
 const MAX_RESULTS = 8
 const KIND_LABELS = { command: 'Go', note: 'Note', task: 'Task' } as const
@@ -17,10 +17,12 @@ export default function CommandPalette({
   open,
   onOpenChange,
   commands,
+  onOpenItem,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   commands: Command[]
+  onOpenItem: (path: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -46,7 +48,7 @@ export default function CommandPalette({
       .map((c) => ({ kind: 'command', key: `command:${c.id}`, label: c.label, run: c.run }))
     for (const item of items.data ?? []) {
       if (found.length >= commands.length + MAX_RESULTS) break
-      if (matches(item.title)) found.push({ kind: item.kind, key: `${item.kind}:${item.path}`, label: item.title })
+      if (matches(item.title)) found.push({ kind: item.kind, key: `${item.kind}:${item.path}`, label: item.title, path: item.path })
     }
     return found
   }, [query, commands, items.data])
@@ -60,9 +62,10 @@ export default function CommandPalette({
   }
 
   function choose(option: Option | undefined) {
-    if (!option || option.kind !== 'command') return // notes and tasks open with the focus view (next)
+    if (!option) return
     onOpenChange(false)
-    option.run()
+    if (option.kind === 'command') option.run()
+    else onOpenItem(option.path)
   }
 
   function onInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -114,10 +117,9 @@ export default function CommandPalette({
                 id={optionId(index)}
                 role="option"
                 aria-selected={index === activeIndex}
-                aria-disabled={option.kind !== 'command'}
                 onMouseMove={() => setActive(index)}
                 onClick={() => choose(option)}
-                className={`flex cursor-default items-center gap-2 rounded px-3 py-2 ${index === activeIndex ? 'bg-stone-100 dark:bg-stone-800' : ''} ${option.kind === 'command' ? '' : 'text-stone-500'}`}
+                className={`flex cursor-default items-center gap-2 rounded px-3 py-2 ${index === activeIndex ? 'bg-stone-100 dark:bg-stone-800' : ''}`}
               >
                 <span className="w-10 shrink-0 text-xs text-stone-500">{KIND_LABELS[option.kind]}</span>
                 <span className="truncate">{option.label}</span>
@@ -128,7 +130,7 @@ export default function CommandPalette({
           <p className="border-t border-stone-200 px-4 py-2 text-xs text-stone-500 dark:border-stone-700">
             {items.isError
               ? "Notes and tasks couldn't be loaded."
-              : 'Opening notes and tasks comes with the focus view. ↑↓ to move, Enter to choose, Esc to close.'}
+              : '↑↓ to move, Enter to open, Esc to close.'}
           </p>
         </Dialog.Content>
       </Dialog.Portal>

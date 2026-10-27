@@ -2,7 +2,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { HomeData, Item } from './api'
+import type { HomeData, Item, NoteDetail } from './api'
+import { LAYOUT_KEY } from './layout'
 import { THEME_KEY } from './theme'
 
 type Reply = { status: number; body?: unknown }
@@ -33,6 +34,45 @@ const ITEMS: Item[] = [
   { kind: 'task', path: 'Tasks/a.md', title: 'Plan weekly sync agenda' },
 ]
 
+const NOTE: NoteDetail = {
+  path: 'Projects/Atlas kickoff.md',
+  title: 'Atlas kickoff',
+  folder: 'Projects',
+  kind: 'note',
+  updated: '2031-04-15T09:12:00+00:00',
+  tags: ['atlas', 'planning'],
+  body: 'Atlas is a sample project.\n\n## Goals\n\n- Ship the **reading list**\n- See [[Atlas architecture]]',
+  task: null,
+}
+
+const TASK: NoteDetail = {
+  path: 'Tasks/a.md',
+  title: 'Plan weekly sync agenda',
+  folder: 'Tasks',
+  kind: 'task',
+  updated: '2031-04-14T10:00:00+00:00',
+  tags: [],
+  body: 'Short description of the task.',
+  task: {
+    status: 'in-progress',
+    priority: 'high',
+    due: '2031-04-15',
+    projects: ['Atlas architecture'],
+    created: '2031-04-13T11:00:00+00:00',
+    completed: null,
+    closed_by: null,
+    time_to_close_minutes: null,
+    history: [
+      { at: '2031-04-13T11:00:00+00:00', from: 'created', to: 'open', remark: null },
+      { at: '2031-04-13T12:00:00+00:00', from: 'open', to: 'in-progress', remark: null },
+    ],
+  },
+}
+
+function withNote(note: NoteDetail): Record<string, Reply> {
+  return { [`GET /api/note?path=${encodeURIComponent(note.path)}`]: { status: 200, body: note } }
+}
+
 /** fetch that answers by method and path, recording every call. */
 function fakeServer(routes: Record<string, Reply>) {
   const calls: Call[] = []
@@ -56,6 +96,7 @@ const withItems = { 'GET /api/items': { status: 200, body: { items: ITEMS } } }
 
 beforeEach(() => {
   localStorage.clear()
+  window.history.replaceState(null, '', '/')
   document.documentElement.classList.remove('dark')
   window.history.replaceState(null, '', '/')
 })
@@ -132,7 +173,7 @@ describe('frame', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await userEvent.type(await screen.findByLabelText('Launch code'), 'code')
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect((await screen.findAllByText('Loading…')).length).toBeGreaterThan(0)
     expect(screen.queryByText('Atlas kickoff')).toBeNull()
   })
 
@@ -148,7 +189,7 @@ describe('frame', () => {
     render(<App />)
     expect(await screen.findByRole('heading', { name: 'Not here yet' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Back to Home' }))
-    expect(await screen.findByRole('heading', { name: 'History' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Due today or overdue' })).toBeInTheDocument()
   })
 })
 
@@ -185,11 +226,14 @@ describe('Home', () => {
     const due = within(screen.getByRole('region', { name: 'Due today or overdue' }))
     expect(due.getByText('Plan weekly sync agenda')).toBeInTheDocument()
     expect(due.getByText('15 Apr')).toBeInTheDocument()
-    expect(due.getByText('Update release checklist')).toBeInTheDocument()
+    const waiting = within(screen.getByRole('region', { name: 'Waiting for your sign-off' }))
+    expect(waiting.getByText('Update release checklist')).toBeInTheDocument()
+    expect(due.queryByText('Update release checklist')).toBeNull()
 
     const notes = within(screen.getByRole('region', { name: 'Recent notes' }))
     expect(notes.getByText('Atlas kickoff')).toBeInTheDocument()
 
+    // History is a panel beside Home, shown by default.
     const history = within(screen.getByRole('region', { name: 'History' }))
     const rows = history.getAllByRole('listitem')
     expect(rows).toHaveLength(2)
@@ -197,6 +241,14 @@ describe('Home', () => {
     expect(rows[0]).toHaveTextContent('In review →Done')
     expect(rows[0]).toHaveTextContent('signed off by owner')
     expect(rows[1]).toHaveTextContent('created →Open')
+    expect(screen.getByRole('link', { name: 'Plan weekly sync agenda' })).toHaveAttribute(
+      'href',
+      '/focus?path=Tasks%2Fa.md',
+    )
+    expect(notes.getByRole('link', { name: 'Atlas kickoff' })).toHaveAttribute(
+      'href',
+      '/focus?path=Projects%2FAtlas%20kickoff.md',
+    )
   })
 
   it('says when there is nothing to show', async () => {
@@ -239,7 +291,7 @@ describe('⌘K palette', () => {
   async function openWithKeys() {
     fakeServer({ ...signedIn, ...withHome, ...withItems })
     render(<App />)
-    await screen.findByRole('heading', { name: 'History' })
+    await screen.findByRole('heading', { name: 'Due today or overdue' })
     await userEvent.keyboard('{Meta>}k{/Meta}')
     return screen.findByRole('combobox', { name: 'Search notes, tasks and commands' })
   }
@@ -247,14 +299,16 @@ describe('⌘K palette', () => {
   it('opens with ⌘K and lists commands, notes and tasks', async () => {
     await openWithKeys()
     const list = within(screen.getByRole('listbox'))
-    expect(await list.findByRole('option', { name: /Atlas kickoff/ })).toHaveAttribute('aria-disabled', 'true')
-    expect(list.getByRole('option', { name: /Sign out/ })).toHaveAttribute('aria-disabled', 'false')
+    expect(await list.findByRole('option', { name: /Atlas kickoff/ })).toBeInTheDocument()
+    expect(list.getByRole('option', { name: /Plan weekly sync agenda/ })).toBeInTheDocument()
+    expect(list.getByRole('option', { name: /Sign out/ })).toBeInTheDocument()
+    expect(list.getByRole('option', { name: /Hide panels/ })).toBeInTheDocument()
   })
 
   it('opens with Ctrl+K and from the top-bar button', async () => {
     fakeServer({ ...signedIn, ...withHome, ...withItems })
     render(<App />)
-    await screen.findByRole('heading', { name: 'History' })
+    await screen.findByRole('heading', { name: 'Due today or overdue' })
     await userEvent.keyboard('{Control>}k{/Control}')
     expect(await screen.findByRole('combobox')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
@@ -296,11 +350,143 @@ describe('⌘K palette', () => {
     expect(options()[options().length - 1]).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('does nothing yet when a note is chosen', async () => {
-    const input = await openWithKeys()
-    await userEvent.type(input, 'atlas')
+  it('opens a note in the focus view', async () => {
+    const calls = fakeServer({ ...signedIn, ...withHome, ...withItems, ...withNote(NOTE) })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Due today or overdue' })
+    await userEvent.keyboard('{Meta>}k{/Meta}')
+    await userEvent.type(await screen.findByRole('combobox'), 'atlas')
     await screen.findByRole('option', { name: /Atlas kickoff/ })
     await userEvent.keyboard('{Enter}')
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Atlas kickoff' })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(calls.some((c) => c.path === '/api/note?path=Projects%2FAtlas%20kickoff.md')).toBe(true)
+  })
+})
+
+function openFocus(note: NoteDetail) {
+  window.history.replaceState(null, '', `/focus?path=${encodeURIComponent(note.path)}`)
+}
+
+describe('focus view', () => {
+  it('reads a note, with its Markdown rendered', async () => {
+    openFocus(NOTE)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(NOTE) })
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Atlas kickoff' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Goals' })).toBeInTheDocument()
+    expect(screen.getByText('reading list').tagName).toBe('STRONG')
+    expect(screen.getByText(/Atlas architecture/)).toBeInTheDocument() // wikilinks stay text until #8
+  })
+
+  it('shows a task with its stage, priority and summary', async () => {
+    openFocus(TASK)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(TASK) })
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Plan weekly sync agenda' })).toBeInTheDocument()
+    expect(screen.getByText('Tasks · Atlas architecture · due 15 Apr')).toBeInTheDocument()
+    const main = within(screen.getByRole('main'))
+    expect(main.getByText('In progress')).toBeInTheDocument()
+    expect(main.getByText('High priority')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Summary' })).getByText('Short description of the task.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
+  })
+
+  it('folds a long task description to a short summary', async () => {
+    const long = { ...TASK, body: 'Long text. '.repeat(100) }
+    openFocus(long)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(long) })
+    render(<App />)
+    const button = await screen.findByRole('button', { name: 'Show all' })
+    expect(screen.getByTestId('summary-body')).toHaveClass('max-h-48')
+    await userEvent.click(button)
+    expect(screen.getByTestId('summary-body')).not.toHaveClass('max-h-48')
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument()
+  })
+
+  it('says when there is nothing at that address', async () => {
+    window.history.replaceState(null, '', '/focus?path=Gone.md')
+    fakeServer({ ...signedIn, ...withHome, 'GET /api/note?path=Gone.md': { status: 404, body: { detail: 'Note not found' } } })
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Not found' })).toBeInTheDocument()
+  })
+
+  it('never turns note text into HTML or unsafe links', async () => {
+    const hostile: NoteDetail = {
+      ...NOTE,
+      body: '<img src=x onerror=alert(1)>\n\n<script>alert(1)</script>\n\n[click](javascript:alert(1)) ![pic](http://example.com/x.png)',
+    }
+    openFocus(hostile)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(hostile) })
+    render(<App />)
+    const link = await screen.findByText('click')
+    expect(link.getAttribute('href') ?? '').not.toMatch(/javascript/i)
+    expect(document.querySelector('script:not([src])')).toBeNull()
+    expect(document.querySelector('img')).toBeNull()
+    expect(screen.getByText('[pic]')).toBeInTheDocument()
+  })
+})
+
+describe('panels', () => {
+  it('shows Details and History by default, with the open task in both', async () => {
+    openFocus(TASK)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(TASK) })
+    render(<App />)
+    const details = within(await screen.findByRole('region', { name: 'Details' }))
+    expect(await details.findByText('Stage')).toBeInTheDocument()
+    expect(details.getByText('Atlas architecture')).toBeInTheDocument()
+    expect(details.getByText('still open')).toBeInTheDocument()
+    const history = within(screen.getByRole('region', { name: 'History' }))
+    const rows = history.getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent('Open →In progress') // newest first
+  })
+
+  it('Details on Home asks you to open something', async () => {
+    fakeServer({ ...signedIn, ...withHome })
+    render(<App />)
+    const details = within(await screen.findByRole('region', { name: 'Details' }))
+    expect(details.getByText('Open a note or task to see its details.')).toBeInTheDocument()
+  })
+
+  it('removes and adds panels, and remembers the choice', async () => {
+    fakeServer({ ...signedIn, ...withHome })
+    const { unmount } = render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove Details panel' }))
+    expect(screen.queryByRole('region', { name: 'Details' })).toBeNull()
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')).toEqual({ visible: ['history'], sideOpen: true })
+
+    unmount()
+    fakeServer({ ...signedIn, ...withHome })
+    render(<App />)
+    await screen.findByRole('region', { name: 'History' })
+    expect(screen.queryByRole('region', { name: 'Details' })).toBeNull()
+
+    // Radix menus open on pointer events jsdom doesn't fully support; the keyboard works the same.
+    screen.getByRole('button', { name: '+ Add panel' }).focus()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Details' }))
+    expect(await screen.findByRole('region', { name: 'Details' })).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}').visible).toEqual(['details', 'history'])
+  })
+
+  it('hides and shows the side area', async () => {
+    fakeServer({ ...signedIn, ...withHome })
+    render(<App />)
+    const toggle = await screen.findByRole('button', { name: 'Panels' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(toggle)
+    expect(screen.queryByRole('complementary', { name: 'Panels' })).toBeNull()
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}').sideOpen).toBe(false)
+    await userEvent.click(toggle)
+    expect(screen.getByRole('complementary', { name: 'Panels' })).toBeInTheDocument()
+  })
+
+  it('panel areas can be resized', async () => {
+    fakeServer({ ...signedIn, ...withHome })
+    render(<App />)
+    await screen.findByRole('region', { name: 'Details' })
+    // One between the page and the side area, one between the two panels.
+    expect(screen.getAllByRole('separator')).toHaveLength(2)
   })
 })

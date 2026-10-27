@@ -23,6 +23,12 @@ export const PRIORITY_DOT: Record<Priority, string> = {
   low: 'bg-stone-400',
 }
 
+export const PRIORITY_CLASSES: Record<Priority, string> = {
+  high: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
+  normal: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+  low: 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300',
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   high: 'High priority',
   normal: 'Normal priority',
@@ -67,4 +73,14 @@ export function greeting(hour: number): string {
 
 export function isStage(value: string): value is Stage {
   return (STAGES as string[]).includes(value)
+}
+
+/** 90 → "1h 30m"; 45 → "45m"; 1500 → "1d 1h". */
+export function duration(minutes: number): string {
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  const mins = minutes % 60
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  if (hours > 0) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  return `${mins}m`
 }
