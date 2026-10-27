@@ -5,7 +5,7 @@ import { ApiError, getNote, type NoteDetail } from './api'
 import { useCurrentItem } from './currentItem'
 import { dateTime, shortDate } from './labels'
 import Markdown, { type ResolvedLinks } from './Markdown'
-import NoteEditor from './NoteEditor'
+import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
 
 // Longer task bodies start folded to a short summary.
@@ -63,8 +63,20 @@ function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
 }
 
 function FocusItem({ item }: { item: NoteDetail }) {
-  const [mode, setMode] = useState<Mode>('read')
-  const [leaveRequest, setLeaveRequest] = useState(0)
+  const [mode, setModeNow] = useState<Mode>('read')
+  const [dirty, setDirty] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const leaving: Leaving = { dirty, setDirty, confirm, setConfirm }
+  function setMode(next: Mode) {
+    // Leaving the editor with unsaved text asks first (in the editor).
+    if (mode === 'edit' && next === 'read' && dirty) return setConfirm(true)
+    setModeNow(next)
+  }
+  function closeEditor() {
+    setDirty(false)
+    setConfirm(false)
+    setModeNow('read')
+  }
   const task = item.task
   const where = [item.folder, task?.projects.join(', ')].filter(Boolean).join(' · ')
   return (
@@ -75,11 +87,11 @@ function FocusItem({ item }: { item: NoteDetail }) {
           {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
         </span>
         {/* Read while editing goes through the editor, which asks before dropping unsaved text. */}
-        <ModeSwitch mode={mode} onChange={(m) => (m === 'edit' ? setMode('edit') : setLeaveRequest((n) => n + 1))} />
+        <ModeSwitch mode={mode} onChange={setMode} />
       </div>
       <h1 className={`mb-4 tracking-tight ${task ? 'text-3xl font-semibold' : 'font-serif text-4xl'}`}>{item.title}</h1>
       {mode === 'edit' ? (
-        <NoteEditor path={item.path} leaveRequest={leaveRequest} onClose={() => setMode('read')} />
+        <NoteEditor path={item.path} leaving={leaving} onClose={closeEditor} />
       ) : task ? (
         <>
           <div className="mb-8 flex flex-wrap gap-1.5">

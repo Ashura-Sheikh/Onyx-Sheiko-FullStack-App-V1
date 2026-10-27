@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { ApiError, getNoteSource, saveNote, type NoteSource } from './api'
 
 /** A browser text box always gives "\n" line endings; compare on that basis. */
@@ -33,25 +33,23 @@ const BUTTON = 'rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-
 const PRIMARY =
   'rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50'
 
-type FormProps = { source: NoteSource; leaveRequest: number; onReload: () => void; onClose: () => void }
+/** Owned by the focus view, so its Read button can ask before leaving too. */
+export type Leaving = {
+  dirty: boolean
+  setDirty: (dirty: boolean) => void
+  confirm: boolean
+  setConfirm: (confirm: boolean) => void
+}
 
-function Form({ source, leaveRequest, onReload, onClose }: FormProps) {
+type FormProps = { source: NoteSource; leaving: Leaving; onReload: () => void; onClose: () => void }
+
+function Form({ source, leaving, onReload, onClose }: FormProps) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState(source.body)
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<Problem | null>(null)
-  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [copied, setCopied] = useState<'yes' | 'failed' | null>(null)
   const dirty = asTyped(draft) !== asTyped(source.body)
-  const seenLeaveRequest = useRef(leaveRequest)
-
-  // "Read" in the mode switch: leave at once if nothing changed, else ask.
-  useEffect(() => {
-    if (leaveRequest === seenLeaveRequest.current) return
-    seenLeaveRequest.current = leaveRequest
-    if (dirty) setConfirmDiscard(true)
-    else onClose()
-  }, [leaveRequest, dirty, onClose])
 
   // Leaving the page (reload, closing the tab) with unsaved text asks first.
   useEffect(() => {
@@ -117,7 +115,8 @@ function Form({ source, leaveRequest, onReload, onClose }: FormProps) {
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value)
-          setConfirmDiscard(false)
+          leaving.setDirty(asTyped(e.target.value) !== asTyped(source.body))
+          leaving.setConfirm(false)
         }}
         onKeyDown={onKeyDown}
         readOnly={!source.writable}
@@ -147,13 +146,13 @@ function Form({ source, leaveRequest, onReload, onClose }: FormProps) {
           {copied === 'yes' ? 'Copied.' : "Couldn't copy. Select the text in the box and copy it yourself."}
         </p>
       )}
-      {confirmDiscard ? (
+      {leaving.confirm ? (
         <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
           <span>Discard your unsaved changes?</span>
           <button type="button" className={BUTTON} onClick={onClose}>
             Discard
           </button>
-          <button type="button" className={BUTTON} onClick={() => setConfirmDiscard(false)}>
+          <button type="button" className={BUTTON} onClick={() => leaving.setConfirm(false)}>
             Keep editing
           </button>
         </div>
@@ -162,7 +161,7 @@ function Form({ source, leaveRequest, onReload, onClose }: FormProps) {
           <button type="button" className={PRIMARY} onClick={() => void save()} disabled={!dirty || saving || !source.writable}>
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button type="button" className={BUTTON} onClick={() => (dirty ? setConfirmDiscard(true) : onClose())}>
+          <button type="button" className={BUTTON} onClick={() => (dirty ? leaving.setConfirm(true) : onClose())}>
             Cancel
           </button>
           {dirty && <span className="text-sm text-stone-500">Unsaved changes</span>}
@@ -178,7 +177,7 @@ function Form({ source, leaveRequest, onReload, onClose }: FormProps) {
  * was opened; if the file changed on disk since, nothing is saved and the
  * text stays on screen.
  */
-export default function NoteEditor({ path, leaveRequest, onClose }: { path: string; leaveRequest: number; onClose: () => void }) {
+export default function NoteEditor({ path, leaving, onClose }: { path: string; leaving: Leaving; onClose: () => void }) {
   // Always the file as it is now, never a cached copy.
   const source = useQuery({
     queryKey: ['note-source', path],
@@ -200,8 +199,11 @@ export default function NoteEditor({ path, leaveRequest, onClose }: { path: stri
     <Form
       key={source.data.version}
       source={source.data}
-      leaveRequest={leaveRequest}
-      onReload={() => void source.refetch()}
+      leaving={leaving}
+      onReload={() => {
+        leaving.setDirty(false)
+        void source.refetch()
+      }}
       onClose={onClose}
     />
   )
