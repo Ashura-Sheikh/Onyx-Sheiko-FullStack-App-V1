@@ -139,3 +139,22 @@ class NoteSummary(Model):
 
 class NoteList(Model):
     notes: list[NoteSummary]
+
+
+class SnippetPart(Model):
+    text: str
+    match: bool
+
+
+class SearchResult(Model):
+    path: str
+    title: str
+    kind: Literal["note", "task"]
+    folder: str
+    snippet: list[SnippetPart] = Field(
+        description="Body text around the match, matched words marked"
+    )
+
+
+class SearchResults(Model):
+    results: list[SearchResult]

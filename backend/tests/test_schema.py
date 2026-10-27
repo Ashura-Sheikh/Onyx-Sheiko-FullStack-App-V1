@@ -32,6 +32,7 @@ def test_schema_lists_the_api_and_nothing_else():
         "/api/home",
         "/api/items",
         "/api/notes",
+        "/api/search",
         "/api/note",
         "/api/health",
     }

@@ -16,7 +16,10 @@ export interface ApiSchemas {
   NoteRef: NoteRef
   NoteSummary: NoteSummary
   RecentNote: RecentNote
+  SearchResult: SearchResult
+  SearchResults: SearchResults
   SessionStatus: SessionStatus
+  SnippetPart: SnippetPart
   StageCounts: StageCounts
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
@@ -164,6 +167,23 @@ export interface NoteSummary {
    */
   updated: string
 }
+export interface SearchResult {
+  folder: string
+  kind: 'note' | 'task'
+  path: string
+  /**
+   * Body text around the match, matched words marked
+   */
+  snippet: SnippetPart[]
+  title: string
+}
+export interface SnippetPart {
+  match: boolean
+  text: string
+}
+export interface SearchResults {
+  results: SearchResult[]
+}
 export interface SessionStatus {
   authenticated: boolean
 }
@@ -175,5 +195,6 @@ export interface GetResponses {
   '/api/items': ItemList
   '/api/note': NoteDetail
   '/api/notes': NoteList
+  '/api/search': SearchResults
   '/api/session': SessionStatus
 }

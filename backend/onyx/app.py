@@ -83,6 +83,10 @@ def create_app(settings: Settings) -> FastAPI:
     def items() -> dict:
         return {"items": summary.items(summary.read_summary(vault))}
 
+    @app.get("/api/search", response_model=models.SearchResults)
+    def search(q: str = Query(min_length=1, max_length=200)) -> dict:
+        return {"results": cache.search(q)}
+
     @app.get("/api/notes", response_model=models.NoteList)
     def notes() -> dict:
         return {"notes": summary.notes_list(summary.read_summary(vault))}
