@@ -15,6 +15,7 @@ describe('generated API types', () => {
       ['/api/home', 'HomeData'],
       ['/api/items', 'ItemList'],
       ['/api/note', 'NoteDetail'],
+      ['/api/notes', 'NoteList'],
       ['/api/session', 'SessionStatus'],
     ])
   })

@@ -1,7 +1,16 @@
 // Every call to the backend goes through apiFetch, so the security header and
 // cookie handling can't be forgotten (threat model T1, T2).
 
-import type { GetResponses, HistoryEntry, HomeData, Item, LaunchCode, NoteDetail, TaskSummary } from './api-types'
+import type {
+  GetResponses,
+  HistoryEntry,
+  HomeData,
+  Item,
+  LaunchCode,
+  NoteDetail,
+  NoteSummary,
+  TaskSummary,
+} from './api-types'
 
 export const CSRF_HEADER = 'X-Onyx-Request'
 
@@ -70,7 +79,7 @@ export async function signOut(): Promise<void> {
 
 export type Stage = NonNullable<TaskSummary['status']>
 export type Priority = NonNullable<TaskSummary['priority']>
-export type { HistoryEntry, HomeData, Item, NoteDetail, TaskSummary }
+export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSummary, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
   return apiGet('/api/home')
@@ -80,8 +89,19 @@ export async function getItems(): Promise<Item[]> {
   return (await apiGet('/api/items')).items
 }
 
+export async function getNotes(): Promise<NoteSummary[]> {
+  return (await apiGet('/api/notes')).notes
+}
+
 export async function getNote(path: string): Promise<NoteDetail> {
   return apiGet('/api/note', { path })
+}
+
+/** The address of the Notes page, optionally showing one folder or one tag. */
+export function notesPath(filter: { folder?: string; tag?: string } = {}): string {
+  if (filter.tag !== undefined) return `/notes?tag=${encodeURIComponent(filter.tag)}`
+  if (filter.folder !== undefined) return `/notes?folder=${encodeURIComponent(filter.folder)}`
+  return '/notes'
 }
 
 /** The address of the focus view for a note or task. */
