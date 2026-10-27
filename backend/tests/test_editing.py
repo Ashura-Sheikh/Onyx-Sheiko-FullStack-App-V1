@@ -129,7 +129,8 @@ def test_source_keeps_hidden_sections_the_focus_view_leaves_out(api):
     """The editor must get the whole body, or saving would drop Status History."""
     client, headers = api
     task = next(
-        n["path"] for n in client.get("/api/items", headers=headers).json()["items"]
+        n["path"]
+        for n in client.get("/api/items", headers=headers).json()["items"]
         if n["kind"] == "task"
     )
     assert "## Status History" in source(client, headers, task)["body"]
@@ -314,7 +315,8 @@ def test_search_finds_the_saved_text_straight_away(api):
     client, headers = api
     data = source(client, headers)
     word = "Zyxwvutsrq"
-    assert save(client, headers, INBOX, f"\n# Inbox\n\n{word}\n", data["version"]).status_code == 200
+    response = save(client, headers, INBOX, f"\n# Inbox\n\n{word}\n", data["version"])
+    assert response.status_code == 200
     results = client.get("/api/search", params={"q": word}, headers=headers).json()["results"]
     assert [r["path"] for r in results] == [INBOX]
 
@@ -329,7 +331,7 @@ def test_saving_leaves_no_temporary_files(api, vault):
 def test_saved_note_content_is_not_logged(api, caplog):
     client, headers = api
     data = source(client, headers)
-    secret = "Qwertyuiop-not-in-logs"
+    marker = "Qwertyuiop-not-in-logs"
     with caplog.at_level("DEBUG"):
-        save(client, headers, INBOX, f"{secret}\n", data["version"])
-    assert secret not in caplog.text
+        save(client, headers, INBOX, f"{marker}\n", data["version"])
+    assert marker not in caplog.text
