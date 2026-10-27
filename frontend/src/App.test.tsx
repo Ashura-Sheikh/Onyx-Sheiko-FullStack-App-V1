@@ -110,6 +110,32 @@ describe('frame', () => {
     expect(calls.some((c) => c.method === 'DELETE' && c.path === '/api/session')).toBe(true)
   })
 
+  it('forgets what it read from the vault when signing out', async () => {
+    let homeCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: string, init: RequestInit) => {
+        const method = init.method ?? 'GET'
+        if (path === '/api/session' && method === 'GET') return Response.json({ authenticated: true })
+        if (path === '/api/session') return new Response(null, { status: 204 })
+        if (path === '/api/home') {
+          homeCalls += 1
+          // First visit answers; after signing in again it never does, so only
+          // data kept from before sign-out could appear.
+          return homeCalls === 1 ? Response.json(HOME) : new Promise<Response>(() => {})
+        }
+        throw new Error(`unexpected call ${method} ${path}`)
+      }),
+    )
+    render(<App />)
+    expect(await screen.findByText('Atlas kickoff')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await userEvent.type(await screen.findByLabelText('Launch code'), 'code')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('Atlas kickoff')).toBeNull()
+  })
+
   it('goes back to sign-in when the session has ended', async () => {
     fakeServer({ ...signedIn, 'GET /api/home': { status: 401, body: { detail: 'Not signed in' } } })
     render(<App />)
