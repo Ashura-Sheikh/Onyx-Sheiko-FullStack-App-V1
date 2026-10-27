@@ -41,6 +41,7 @@ v1 is a **local, single-user** web app: a FastAPI server bound to `127.0.0.1`, s
 | T12 | Secrets committed to the repo | GitHub secret scanning with push protection; gitleaks in CI | gitleaks job passes on every PR |
 | T13 | Vulnerable or malicious dependencies | Lockfiles committed; Dependabot; `pip-audit` and `npm audit` in CI; CodeQL; Bandit | Audit jobs pass on every PR |
 | T14 | Compromised CI action | Every action pinned to a full commit SHA; workflow tokens read-only | Reviewed in each workflow PR |
+| T15 | A note's frontmatter attacks the parser (code execution, huge or deeply nested YAML) | `yaml.safe_load` only (no Python objects); frontmatter over 64 KiB ignored; every value checked and unknown ones dropped before it reaches the API; titles capped at 300 characters | Tests: a `!!python/object` tag gives no fields; oversized and deeply nested frontmatter give no fields, and one such note doesn't break Home; unknown status and priority dropped |
 
 ## Out of scope for v1
 

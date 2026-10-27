@@ -62,6 +62,19 @@ def test_frontmatter_never_builds_python_objects():
     assert frontmatter.split(text)[0] == {}
 
 
+def test_deeply_nested_frontmatter_gives_no_fields():
+    nested = "[" * 5000 + "]" * 5000
+    assert frontmatter.split(f"---\nx: {nested}\n---\n")[0] == {}
+
+
+def test_one_broken_note_does_not_break_home(tmp_path):
+    write(tmp_path, "nested.md", "---\nx: " + "[" * 5000 + "]" * 5000 + "\n---\n# Nested\n")
+    write(tmp_path, "t.md", task())
+    result = summary.read_summary(Vault(tmp_path))
+    assert [n.title for n in result.notes] == ["Nested"]
+    assert len(result.tasks) == 1
+
+
 def test_oversized_frontmatter_is_ignored():
     big = "x: " + "a" * frontmatter.MAX_FRONTMATTER_BYTES
     assert frontmatter.split(f"---\n{big}\n---\n")[0] == {}

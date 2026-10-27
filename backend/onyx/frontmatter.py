@@ -37,7 +37,8 @@ def _parse(raw: str) -> dict:
         return {}
     try:
         data = yaml.safe_load(raw)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
+        # RecursionError: deeply nested YAML ("[[[[…") fits in a few KB.
         return {}
     return data if isinstance(data, dict) else {}
 
