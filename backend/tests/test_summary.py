@@ -443,6 +443,19 @@ def test_a_symlink_out_of_the_vault_cannot_be_opened(tmp_path):
     assert summary.note_detail(Vault(tmp_path / "vault"), "link.md") is None
 
 
+def test_only_what_home_lists_can_be_opened(tmp_path):
+    """The path guard allows a symlinked folder that stays inside the vault,
+    but the listing doesn't follow symlinked folders, so neither does the
+    focus view: what can be opened is exactly what Home and ⌘K can list."""
+    (tmp_path / "vault" / "real").mkdir(parents=True)
+    write(tmp_path / "vault", "real/a.md", "# A\n")
+    (tmp_path / "vault" / "alias").symlink_to(tmp_path / "vault" / "real")
+    vault = Vault(tmp_path / "vault")
+    assert vault.read("alias/a.md").text == "# A\n"  # the guard alone would allow it
+    assert summary.note_detail(vault, "alias/a.md") is None
+    assert summary.note_detail(vault, "real/a.md")["title"] == "A"
+
+
 def test_note_endpoint(app):
     client = TestClient(app, base_url=BASE)
     url = "/api/note?path=Projects/Atlas%20kickoff.md"
