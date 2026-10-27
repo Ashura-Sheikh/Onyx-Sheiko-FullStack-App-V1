@@ -883,6 +883,9 @@ describe('editing a note', () => {
     editServer({}, { ...SOURCE, body: 'Line one.\r\nLine two.\r\n' })
     const box = await startEditing()
     // A browser gives the text back with "\n"; that alone isn't a change.
+    // (Changed and back, so React really sees the "\n" text.)
+    fireEvent.change(box, { target: { value: 'something else' } })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
     fireEvent.change(box, { target: { value: 'Line one.\nLine two.\n' } })
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(screen.queryByText('Unsaved changes')).toBeNull()
