@@ -9,6 +9,7 @@ import type {
   LaunchCode,
   NoteDetail,
   NoteSummary,
+  SearchResult,
   TaskSummary,
 } from './api-types'
 
@@ -79,7 +80,7 @@ export async function signOut(): Promise<void> {
 
 export type Stage = NonNullable<TaskSummary['status']>
 export type Priority = NonNullable<TaskSummary['priority']>
-export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSummary, TaskSummary }
+export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSummary, SearchResult, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
   return apiGet('/api/home')
@@ -89,6 +90,14 @@ export async function getItems(): Promise<Item[]> {
   return (await apiGet('/api/items')).items
 }
 
+/** Notes and tasks matching the words in `text`, by title and content, best first. */
+export async function search(text: string): Promise<SearchResult[]> {
+  return (await apiGet('/api/search', { q: text })).results
+}
+
+/** Search starts at this many characters. */
+export const SEARCH_MIN_CHARS = 2
+
 export async function getNotes(): Promise<NoteSummary[]> {
   return (await apiGet('/api/notes')).notes
 }
@@ -97,8 +106,9 @@ export async function getNote(path: string): Promise<NoteDetail> {
   return apiGet('/api/note', { path })
 }
 
-/** The address of the Notes page, optionally showing one folder or one tag. */
-export function notesPath(filter: { folder?: string; tag?: string } = {}): string {
+/** The address of the Notes page, optionally showing one folder, one tag or a search. */
+export function notesPath(filter: { folder?: string; tag?: string; q?: string } = {}): string {
+  if (filter.q !== undefined) return `/notes?q=${encodeURIComponent(filter.q)}`
   if (filter.tag !== undefined) return `/notes?tag=${encodeURIComponent(filter.tag)}`
   if (filter.folder !== undefined) return `/notes?folder=${encodeURIComponent(filter.folder)}`
   return '/notes'
