@@ -11,6 +11,8 @@ requirements-audit.txt
 # Node
 node_modules/
 dist/
+# Vitest's output folder (e.g. --reporter=json)
+.vitest/
 *.log
 
 # The app's SQLite cache. It holds note content, so it must never be

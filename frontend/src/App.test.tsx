@@ -239,14 +239,17 @@ describe('Home', () => {
     const notes = within(screen.getByRole('region', { name: 'Recent notes' }))
     expect(notes.getByText('Atlas kickoff')).toBeInTheDocument()
 
-    // History is a panel beside Home, shown by default.
-    const history = within(screen.getByRole('region', { name: 'History' }))
-    const rows = history.getAllByRole('listitem')
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('Fix broken wikilink')
-    expect(rows[0]).toHaveTextContent('In review →Done')
-    expect(rows[0]).toHaveTextContent('signed off by owner')
-    expect(rows[1]).toHaveTextContent('created →Open')
+    // History is on Home's page and in the History panel beside it (shown by default).
+    const inPage = within(within(screen.getByRole('main')).getByRole('region', { name: 'History' }))
+    const inPanel = within(within(screen.getByRole('complementary', { name: 'Panels' })).getByRole('region', { name: 'History' }))
+    for (const history of [inPage, inPanel]) {
+      const rows = history.getAllByRole('listitem')
+      expect(rows).toHaveLength(2)
+      expect(rows[0]).toHaveTextContent('Fix broken wikilink')
+      expect(rows[0]).toHaveTextContent('In review →Done')
+      expect(rows[0]).toHaveTextContent('signed off by owner')
+      expect(rows[1]).toHaveTextContent('created →Open')
+    }
     expect(screen.getByRole('link', { name: 'Plan weekly sync agenda' })).toHaveAttribute(
       'href',
       '/focus?path=Tasks%2Fa.md',
@@ -271,7 +274,7 @@ describe('Home', () => {
     expect(await screen.findByText('All clear.')).toBeInTheDocument()
     expect(screen.getByText('Nothing waiting.')).toBeInTheDocument()
     expect(screen.getByText('No notes yet.')).toBeInTheDocument()
-    expect(screen.getByText('No stage changes recorded yet.')).toBeInTheDocument()
+    expect(screen.getAllByText('No stage changes recorded yet.')).toHaveLength(2) // page and panel
     expect(screen.getByText(/0 tasks due · 0 waiting/)).toBeInTheDocument()
   })
 
@@ -453,6 +456,14 @@ describe('panels', () => {
     const history = within(screen.getByRole('region', { name: 'History' }))
     const rows = history.getAllByRole('listitem')
     expect(rows[0]).toHaveTextContent('Open →In progress') // newest first
+  })
+
+  it('History stays on Home when the panels are hidden', async () => {
+    fakeServer({ ...signedIn, ...withHome })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Panels' }))
+    expect(screen.queryByRole('complementary', { name: 'Panels' })).toBeNull()
+    expect(within(screen.getByRole('main')).getByRole('region', { name: 'History' })).toBeInTheDocument()
   })
 
   it('Details on Home asks you to open something', async () => {
