@@ -83,6 +83,10 @@ def create_app(settings: Settings) -> FastAPI:
     def items() -> dict:
         return {"items": summary.items(summary.read_summary(vault))}
 
+    @app.get("/api/notes", response_model=models.NoteList)
+    def notes() -> dict:
+        return {"notes": summary.notes_list(summary.read_summary(vault))}
+
     @app.get(
         "/api/note",
         response_model=models.NoteDetail,

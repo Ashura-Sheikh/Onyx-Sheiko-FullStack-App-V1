@@ -102,6 +102,17 @@ class TaskDetail(Model):
     history: list[TaskHistoryEntry]
 
 
+class NoteRef(Model):
+    path: str
+    title: str
+
+
+class TaskRef(Model):
+    path: str
+    title: str
+    status: Stage | None
+
+
 class NoteDetail(Model):
     path: str
     title: str
@@ -110,4 +121,21 @@ class NoteDetail(Model):
     updated: str = Field(description="ISO 8601 time")
     tags: list[str]
     body: str
+    links: dict[str, str | None] = Field(
+        description="Each [[link]] target in the body, and the note it opens (null: none)"
+    )
+    backlinks: list[NoteRef]
+    related_tasks: list[TaskRef]
     task: TaskDetail | None
+
+
+class NoteSummary(Model):
+    path: str
+    title: str
+    folder: str
+    updated: str = Field(description="ISO 8601 time")
+    tags: list[str]
+
+
+class NoteList(Model):
+    notes: list[NoteSummary]

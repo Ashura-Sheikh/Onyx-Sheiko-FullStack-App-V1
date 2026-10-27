@@ -12,11 +12,15 @@ export interface ApiSchemas {
   ItemList: ItemList
   LaunchCode: LaunchCode
   NoteDetail: NoteDetail
+  NoteList: NoteList
+  NoteRef: NoteRef
+  NoteSummary: NoteSummary
   RecentNote: RecentNote
   SessionStatus: SessionStatus
   StageCounts: StageCounts
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
+  TaskRef: TaskRef
   TaskSummary: TaskSummary
   ValidationError: ValidationError
 }
@@ -95,10 +99,18 @@ export interface LaunchCode {
   code: string
 }
 export interface NoteDetail {
+  backlinks: NoteRef[]
   body: string
   folder: string
   kind: 'note' | 'task'
+  /**
+   * Each [[link]] target in the body, and the note it opens (null: none)
+   */
+  links: {
+    [k: string]: string | null
+  }
   path: string
+  related_tasks: TaskRef[]
   tags: string[]
   task: TaskDetail | null
   title: string
@@ -106,6 +118,15 @@ export interface NoteDetail {
    * ISO 8601 time
    */
   updated: string
+}
+export interface NoteRef {
+  path: string
+  title: string
+}
+export interface TaskRef {
+  path: string
+  status: ('open' | 'in-progress' | 'in-review' | 'done') | null
+  title: string
 }
 export interface TaskDetail {
   closed_by: string | null
@@ -130,6 +151,19 @@ export interface TaskHistoryEntry {
   remark: string | null
   to: 'open' | 'in-progress' | 'in-review' | 'done'
 }
+export interface NoteList {
+  notes: NoteSummary[]
+}
+export interface NoteSummary {
+  folder: string
+  path: string
+  tags: string[]
+  title: string
+  /**
+   * ISO 8601 time
+   */
+  updated: string
+}
 export interface SessionStatus {
   authenticated: boolean
 }
@@ -140,5 +174,6 @@ export interface GetResponses {
   '/api/home': HomeData
   '/api/items': ItemList
   '/api/note': NoteDetail
+  '/api/notes': NoteList
   '/api/session': SessionStatus
 }
