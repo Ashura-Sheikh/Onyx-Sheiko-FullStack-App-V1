@@ -2,8 +2,8 @@ import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-qu
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes } from 'react-router'
 import { ApiError, getSession, signOut } from './api'
+import { FEATURES } from './features'
 import Frame from './Frame'
-import Home from './Home'
 import SignIn from './SignIn'
 import { applyTheme, initialTheme, saveTheme, type Theme } from './theme'
 
@@ -82,7 +82,9 @@ export default function App() {
       <BrowserRouter>
         <Frame theme={theme} onToggleTheme={toggleTheme} onSignOut={handleSignOut}>
           <Routes>
-            <Route path="/" element={<Home />} />
+            {FEATURES.map((f) => (
+              <Route key={f.id} path={f.route.path} element={f.route.element} />
+            ))}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Frame>
