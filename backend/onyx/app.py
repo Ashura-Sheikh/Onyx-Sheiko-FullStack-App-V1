@@ -5,11 +5,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from onyx import config
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
 from onyx.security import ApiGuard, BodySizeLimit, SecurityHeaders, session_from_scope
 from onyx.vault import Vault
+from onyx.web import mount_frontend
 
 
 class LaunchCode(BaseModel):
@@ -65,6 +67,9 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    # Last route: everything that isn't /api/* is the frontend.
+    mount_frontend(app, settings.frontend_dist or config.DEFAULT_FRONTEND_DIST)
 
     # Added last = runs first. Outermost: Host check.
     app.add_middleware(ApiGuard, auth=auth, allowed_origins=settings.allowed_origins)

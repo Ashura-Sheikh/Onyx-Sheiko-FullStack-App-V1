@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HOST = "127.0.0.1"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 DEFAULT_PORT = 8731
 
 # Host header values accepted (DNS-rebinding defence, threat model T3).
@@ -39,6 +41,8 @@ class Settings:
     allowed_hosts: tuple[str, ...] = field(default=ALLOWED_HOSTS)
     # None = the user's cache folder (see onyx/cache.py); ONYX_CACHE_DIR overrides it.
     cache_dir: Path | None = None
+    # The built frontend (npm run build); tests point this at a temporary folder.
+    frontend_dist: Path | None = None  # None = DEFAULT_FRONTEND_DIST
 
     @property
     def allowed_origins(self) -> frozenset[str]:

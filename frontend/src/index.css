@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Dark mode follows a .dark class on <html> (set by the app), not only the system setting. */
+@custom-variant dark (&:where(.dark, .dark *));

@@ -16,23 +16,31 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from onyx.auth import CSRF_HEADER, CSRF_VALUE, SESSION_COOKIE, AuthState
 
-CONTENT_SECURITY_POLICY = "; ".join(
-    [
-        "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self'",
-        "img-src 'self' data:",
-        "font-src 'self'",
-        "connect-src 'self'",
-        "object-src 'none'",
-        "base-uri 'none'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-    ]
-)
+
+def content_security_policy(nonce: str | None = None) -> str:
+    """The CSP for a response. Only the HTML page gets a nonce, so Radix's
+    <style> tags carrying it are allowed; nothing else inline ever is."""
+    style = f"style-src 'self' 'nonce-{nonce}'" if nonce else "style-src 'self'"
+    return "; ".join(
+        [
+            "default-src 'self'",
+            "script-src 'self'",
+            style,
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        ]
+    )
+
+
+CONTENT_SECURITY_POLICY = content_security_policy()
+
 
 SECURITY_HEADERS: list[tuple[bytes, bytes]] = [
-    (b"content-security-policy", CONTENT_SECURITY_POLICY.encode()),
     (b"x-content-type-options", b"nosniff"),
     (b"referrer-policy", b"no-referrer"),
     (b"x-frame-options", b"DENY"),
@@ -81,7 +89,12 @@ class SecurityHeaders:
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
-                headers = [h for h in message.get("headers", []) if h[0] not in _HEADER_NAMES]
+                replaced = _HEADER_NAMES | ({b"cache-control"} if is_api else set())
+                headers = [h for h in message.get("headers", []) if h[0] not in replaced]
+                nonce = scope.get("state", {}).get("csp_nonce") if not is_api else None
+                headers.append(
+                    (b"content-security-policy", content_security_policy(nonce).encode())
+                )
                 headers += SECURITY_HEADERS
                 if is_api:
                     headers.append((b"cache-control", b"no-store"))
@@ -91,7 +104,7 @@ class SecurityHeaders:
         await self.app(scope, receive, send_with_headers)
 
 
-_HEADER_NAMES = {name for name, _ in SECURITY_HEADERS} | {b"cache-control"}
+_HEADER_NAMES = {name for name, _ in SECURITY_HEADERS} | {b"content-security-policy"}
 
 
 class BodySizeLimit:
