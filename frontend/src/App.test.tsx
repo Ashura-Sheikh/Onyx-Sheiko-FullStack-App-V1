@@ -961,12 +961,16 @@ describe('editing a note', () => {
     expect(preview.getByTitle('"Brand new" is checked when you save')).toBeInTheDocument()
   })
 
-  it('the toolbar is disabled when writes are off', async () => {
+  it('the toolbar and its shortcuts do nothing when writes are off', async () => {
     editServer({}, { ...SOURCE, writable: false })
-    await startEditing()
+    const box = await startEditing()
     for (const button of within(screen.getByRole('toolbar', { name: 'Formatting' })).getAllByRole('button')) {
       expect(button).toBeDisabled()
     }
+    box.focus()
+    box.setSelectionRange(0, 5)
+    await userEvent.keyboard('{Meta>}b{/Meta}')
+    expect(box.value).toBe(SOURCE.body)
   })
 
   it('the preview never turns note text into HTML or unsafe links', async () => {

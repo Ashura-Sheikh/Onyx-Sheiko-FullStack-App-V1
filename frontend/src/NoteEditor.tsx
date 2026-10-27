@@ -135,7 +135,7 @@ function Form({ source, note, leaving, onReload, onClose }: FormProps) {
       return
     }
     const tool = TOOLBAR.find((t) => t.shortcut === key)
-    if (tool && source.writable) {
+    if (tool) {
       event.preventDefault()
       format(tool.format)
     }
