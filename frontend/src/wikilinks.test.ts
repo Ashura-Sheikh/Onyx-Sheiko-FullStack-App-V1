@@ -25,7 +25,7 @@ describe('wikilinks', () => {
   it('leaves code and existing links alone', () => {
     const code: Node = { type: 'inlineCode', value: '[[Atlas]]' }
     const link: Node = { type: 'link', url: 'https://example.com', children: [text('[[Atlas]]')] }
-    const tree = run({ type: 'paragraph', children: [code, link] })
+    const tree = run({ type: 'paragraph', children: [structuredClone(code), structuredClone(link)] })
     expect(tree.children).toEqual([code, link])
   })
 

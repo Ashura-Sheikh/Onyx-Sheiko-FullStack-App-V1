@@ -127,3 +127,21 @@ def test_dev_vault_links():
     }
     assert {b["title"] for b in detail["backlinks"]} >= {"Atlas architecture"}
     assert detail["related_tasks"]  # tasks list it in `projects`
+
+
+def test_notes_endpoint():
+    from fastapi.testclient import TestClient
+
+    from onyx.app import create_app
+    from onyx.config import load_settings
+    from tests.test_security_baseline import BASE, DEV_VAULT, OK, PORT, sign_in, with_session
+
+    app = create_app(load_settings(DEV_VAULT, PORT))
+    client = TestClient(app, base_url=BASE)
+    assert client.get("/api/notes", headers=OK).status_code == 401
+    session = sign_in(client, app)
+    notes = client.get("/api/notes", headers=with_session(session)).json()["notes"]
+    assert set(notes[0]) == {"path", "title", "folder", "updated", "tags"}
+    assert not any(n["path"].startswith("Tasks/") for n in notes)
+    kickoff = next(n for n in notes if n["path"] == "Projects/Atlas kickoff.md")
+    assert kickoff["tags"] == ["atlas", "planning"]
