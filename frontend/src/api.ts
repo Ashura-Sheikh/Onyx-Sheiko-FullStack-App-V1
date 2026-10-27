@@ -1,6 +1,8 @@
 // Every call to the backend goes through apiFetch, so the security header and
 // cookie handling can't be forgotten (threat model T1, T2).
 
+import type { GetResponses, HistoryEntry, HomeData, Item, LaunchCode, NoteDetail, TaskSummary } from './api-types'
+
 export const CSRF_HEADER = 'X-Onyx-Request'
 
 export class ApiError extends Error {
@@ -35,88 +37,51 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   return response
 }
 
+/**
+ * A GET to an endpoint, typed from the backend's schema: the path decides the
+ * response type (src/api-types.ts, generated; see scripts/gen-api-types.ts).
+ */
+export async function apiGet<P extends keyof GetResponses>(path: P, query?: Record<string, string>): Promise<GetResponses[P]> {
+  // encodeURIComponent, not URLSearchParams: a space stays %20, as in every other address here.
+  const search = query
+    ? `?${Object.entries(query)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&')}`
+    : ''
+  const response = await apiFetch(`${path}${search}`)
+  return (await response.json()) as GetResponses[P]
+}
+
 export async function getSession(): Promise<boolean> {
-  const response = await apiFetch('/api/session')
-  const body = (await response.json()) as { authenticated: boolean }
+  const body = await apiGet('/api/session')
   return body.authenticated === true
 }
 
 export async function signIn(code: string): Promise<void> {
-  await apiFetch('/api/session', { method: 'POST', body: JSON.stringify({ code }) })
+  const body: LaunchCode = { code }
+  await apiFetch('/api/session', { method: 'POST', body: JSON.stringify(body) })
 }
 
 export async function signOut(): Promise<void> {
   await apiFetch('/api/session', { method: 'DELETE' })
 }
 
-// --- Home and the ⌘K palette (read-only) -------------------------------------
+// --- Types, all generated from the backend's response models -------------------
 
-export type Stage = 'open' | 'in-progress' | 'in-review' | 'done'
-export type Priority = 'high' | 'normal' | 'low'
-
-export type TaskSummary = {
-  path: string
-  title: string
-  status: Stage | null
-  priority: Priority | null
-  due: string | null
-}
-
-export type HistoryEntry = {
-  at: string
-  path: string
-  title: string
-  from: string
-  to: Stage
-  remark: string | null
-}
-
-export type HomeData = {
-  today: string
-  counts: Record<Stage, number>
-  due: TaskSummary[]
-  waiting: TaskSummary[]
-  recent_notes: { path: string; title: string; folder: string; updated: string }[]
-  history: HistoryEntry[]
-}
-
-export type Item = { kind: 'note' | 'task'; path: string; title: string }
+export type Stage = NonNullable<TaskSummary['status']>
+export type Priority = NonNullable<TaskSummary['priority']>
+export type { HistoryEntry, HomeData, Item, NoteDetail, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
-  return (await (await apiFetch('/api/home')).json()) as HomeData
+  return apiGet('/api/home')
 }
 
 export async function getItems(): Promise<Item[]> {
-  const body = (await (await apiFetch('/api/items')).json()) as { items: Item[] }
-  return body.items
-}
-
-// --- One note or task, for the focus view (read-only) -------------------------
-
-export type NoteDetail = {
-  path: string
-  title: string
-  folder: string
-  kind: 'note' | 'task'
-  updated: string
-  tags: string[]
-  body: string
-  task: null | {
-    status: Stage | null
-    priority: Priority | null
-    due: string | null
-    projects: string[]
-    created: string | null
-    completed: string | null
-    closed_by: string | null
-    time_to_close_minutes: number | null
-    history: Omit<HistoryEntry, 'path' | 'title'>[]
-  }
+  return (await apiGet('/api/items')).items
 }
 
 export async function getNote(path: string): Promise<NoteDetail> {
-  const response = await apiFetch(`/api/note?path=${encodeURIComponent(path)}`)
-  return (await response.json()) as NoteDetail
+  return apiGet('/api/note', { path })
 }
 
 /** The address of the focus view for a note or task. */

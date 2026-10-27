@@ -86,6 +86,17 @@ curl -c "$TMPDIR/onyx-cookies.txt" -H 'X-Onyx-Request: 1' -H 'Content-Type: appl
 curl -b "$TMPDIR/onyx-cookies.txt" -H 'X-Onyx-Request: 1' http://127.0.0.1:8731/api/health
 ```
 
+### Changing the API
+
+The frontend's API types are generated from the backend, so the two can't drift apart:
+
+1. Change the response models in `backend/onyx/models.py` (and the endpoint in `backend/onyx/app.py`).
+2. Write the schema: `uv run python -m onyx.schema` in `backend/` (updates `frontend/openapi.json`).
+3. Generate the types: `npm run gen:api` in `frontend/` (updates `frontend/src/api-types.ts`).
+4. Commit all three. A backend test fails if `openapi.json` is out of date, and a frontend test fails if `api-types.ts` is.
+
+`apiGet('/api/…')` in `frontend/src/api.ts` is typed from that file: the path decides the response type, and an endpoint that doesn't exist won't type-check. The server itself never serves its schema.
+
 ## Contributing
 
 Every change goes through a pull request; `main` is protected and CI must pass. Never put real notes, names, paths or secrets in code, tests, issues or pull requests.
