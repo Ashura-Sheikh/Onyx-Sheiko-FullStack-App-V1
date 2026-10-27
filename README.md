@@ -89,6 +89,9 @@ It copies `dev-vault/` into a new temporary folder, prints where, and starts the
 
 In a note, **Edit** opens its body as plain Markdown. **Save** (or ⌘S / Ctrl+S) writes it:
 
+- A toolbar above the text adds Markdown: Heading, Bold, Italic, bulleted and numbered lists, Checkbox, Quote, Link, `[[Wikilink]]` and Code. Each one formats the selected text, or the lines it touches. Pressing it again removes the formatting. ⌘B / Ctrl+B and ⌘I / Ctrl+I work too.
+- A live preview beside the text shows the note as Read will (below the text when the window is narrow). A `[[link]]` you've just added is checked against the vault when you save.
+
 - Only the body is edited. The frontmatter (the fields between the `---` lines, including tags) is shown above the box, and kept byte for byte. Edit fields in Obsidian for now.
 - The body includes sections the reading view leaves out, such as `## Status History`.
 - If the file changed on disk since you opened it (in Obsidian, say), nothing is saved. Your text stays on screen, with **Reload (discard my edit)** and **Copy my text**.

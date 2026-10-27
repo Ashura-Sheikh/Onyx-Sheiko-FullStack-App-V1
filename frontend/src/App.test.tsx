@@ -899,6 +899,90 @@ describe('editing a note', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  it('has a formatting toolbar; Bold wraps the selected word', async () => {
+    editServer()
+    const box = await startEditing()
+    const toolbar = screen.getByRole('toolbar', { name: 'Formatting' })
+    expect(within(toolbar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Heading', 'Bold', 'Italic', 'Bulleted list', 'Numbered list', 'Checkbox', 'Quote', 'Link', 'Wikilink', 'Code',
+    ])
+    const start = box.value.indexOf('sample')
+    box.setSelectionRange(start, start + 'sample'.length)
+    await userEvent.click(within(toolbar).getByRole('button', { name: 'Bold' }))
+    expect(box.value).toContain('Atlas is a **sample** project.')
+    expect([box.selectionStart, box.selectionEnd]).toEqual([start + 2, start + 2 + 'sample'.length])
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    expect(within(screen.getByRole('region', { name: 'Preview' })).getByText('sample').tagName).toBe('STRONG')
+  })
+
+  it('line formats change the whole line: Checkbox', async () => {
+    editServer()
+    const box = await startEditing()
+    const at = box.value.indexOf('sample')
+    box.setSelectionRange(at, at)
+    await userEvent.click(screen.getByRole('button', { name: 'Checkbox' }))
+    expect(box.value).toContain('\n- [ ] Atlas is a sample project.\n')
+  })
+
+  it.each([
+    ['Meta', 'b', '**'],
+    ['Control', 'i', '*'],
+  ])('%s+%s formats the selection', async (key, letter, marker) => {
+    editServer()
+    const box = await startEditing()
+    const start = box.value.indexOf('project')
+    box.focus()
+    box.setSelectionRange(start, start + 'project'.length)
+    await userEvent.keyboard(`{${key}>}${letter}{/${key}}`)
+    expect(box.value).toContain(`a sample ${marker}project${marker}.`)
+  })
+
+  it('the preview shows the text as Read does, as you type', async () => {
+    editServer()
+    const box = await startEditing()
+    const preview = within(screen.getByRole('region', { name: 'Preview' }))
+    expect(preview.getByText('Atlas is a sample project.')).toBeInTheDocument()
+    // Like Read: no title heading (the page shows it) and no Status History.
+    expect(preview.queryByRole('heading', { name: 'Atlas kickoff' })).toBeNull()
+    expect(preview.queryByText('Status History')).toBeNull()
+    expect(preview.queryByText('kept')).toBeNull()
+    await typeIn(box, '\n## Fresh heading\n')
+    expect(await preview.findByRole('heading', { name: 'Fresh heading' })).toBeInTheDocument()
+  })
+
+  it('in the preview, a known [[link]] opens its note and a new one waits for the save', async () => {
+    editServer()
+    const box = await startEditing()
+    // Set, not typed: "[" is special in user-event's keyboard syntax.
+    // (Before Status History, which the preview hides, as Read does.)
+    fireEvent.change(box, { target: { value: box.value.replace('project.', 'project. See [[Atlas architecture]] and [[Brand new]].') } })
+    const preview = within(screen.getByRole('region', { name: 'Preview' }))
+    expect(await preview.findByRole('link', { name: 'Atlas architecture' })).toHaveAttribute('href', '/focus?path=Projects%2FAtlas%20architecture.md')
+    expect(preview.getByTitle('"Brand new" is checked when you save')).toBeInTheDocument()
+  })
+
+  it('the toolbar and its shortcuts do nothing when writes are off', async () => {
+    editServer({}, { ...SOURCE, writable: false })
+    const box = await startEditing()
+    for (const button of within(screen.getByRole('toolbar', { name: 'Formatting' })).getAllByRole('button')) {
+      expect(button).toBeDisabled()
+    }
+    box.focus()
+    box.setSelectionRange(0, 5)
+    await userEvent.keyboard('{Meta>}b{/Meta}')
+    expect(box.value).toBe(SOURCE.body)
+  })
+
+  it('the preview never turns note text into HTML or unsafe links', async () => {
+    const hostile = '<img src=x onerror=alert(1)>\n\n<script>alert(1)</script>\n\n[click](javascript:alert(1))'
+    editServer({}, { ...SOURCE, body: hostile })
+    await startEditing()
+    const link = await within(screen.getByRole('region', { name: 'Preview' })).findByText('click')
+    expect(link.getAttribute('href') ?? '').not.toMatch(/javascript/i)
+    expect(document.querySelector('img')).toBeNull()
+    expect(document.querySelector('script:not([src])')).toBeNull()
+  })
+
   it('shows note text in the editor as text, never as HTML', async () => {
     const hostile = '<img src=x onerror=alert(1)><script>alert(1)</script>'
     editServer({}, { ...SOURCE, frontmatter: `---\ntitle: "${hostile}"\n---\n`, body: hostile })

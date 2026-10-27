@@ -1,6 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type KeyboardEvent } from 'react'
-import { ApiError, getNoteSource, saveNote, type NoteSource } from './api'
+import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { ApiError, getNoteSource, saveNote, type NoteDetail, type NoteSource } from './api'
+import Markdown from './Markdown'
+import { applied, applyFormat, TOOLBAR, type Format } from './markdownFormat'
+import { shownBody } from './readView'
+import { IS_MAC } from './shortcuts'
 
 /** A browser text box always gives "\n" line endings; compare on that basis. */
 const asTyped = (text: string) => text.replace(/\r\n/g, '\n')
@@ -41,15 +45,49 @@ export type Leaving = {
   setConfirm: (confirm: boolean) => void
 }
 
-type FormProps = { source: NoteSource; leaving: Leaving; onReload: () => void; onClose: () => void }
+/** What the preview needs from the note as last read: its title, kind and resolved links. */
+export type PreviewOf = Pick<NoteDetail, 'title' | 'kind' | 'links'>
 
-function Form({ source, leaving, onReload, onClose }: FormProps) {
+type FormProps = { source: NoteSource; note: PreviewOf; leaving: Leaving; onReload: () => void; onClose: () => void }
+
+function Form({ source, note, leaving, onReload, onClose }: FormProps) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState(source.body)
   const [saving, setSaving] = useState(false)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [copied, setCopied] = useState<'yes' | 'failed' | null>(null)
   const dirty = asTyped(draft) !== asTyped(source.body)
+  const box = useRef<HTMLTextAreaElement>(null)
+  // Where to put the selection once a toolbar edit has been rendered.
+  const pendingSelection = useRef<[number, number] | null>(null)
+  const previewText = shownBody(useDeferredValue(draft), note.title)
+
+  useLayoutEffect(() => {
+    const selection = pendingSelection.current
+    if (selection && box.current) {
+      pendingSelection.current = null
+      box.current.setSelectionRange(selection[0], selection[1])
+    }
+  }, [draft])
+
+  function update(value: string) {
+    setDraft(value)
+    leaving.setDirty(asTyped(value) !== asTyped(source.body))
+    leaving.setConfirm(false)
+  }
+
+  function format(kind: Format) {
+    const el = box.current
+    if (!el || !source.writable) return
+    const edit = applyFormat(el.value, el.selectionStart, el.selectionEnd, kind)
+    pendingSelection.current = [edit.selectStart, edit.selectEnd]
+    el.focus()
+    el.setSelectionRange(edit.start, edit.end)
+    // insertText keeps the browser's own undo (⌘Z) working. Where it isn't
+    // available (or there's nothing to insert), set the text directly.
+    const typed = edit.text !== '' && typeof document.execCommand === 'function' && document.execCommand('insertText', false, edit.text)
+    if (!typed) update(applied(el.value, edit))
+  }
 
   // Leaving the page (reload, closing the tab) with unsaved text asks first.
   useEffect(() => {
@@ -89,9 +127,17 @@ function Form({ source, leaving, onReload, onClose }: FormProps) {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+    const key = event.key.toLowerCase()
+    if (key === 's') {
       event.preventDefault()
       void save()
+      return
+    }
+    const tool = TOOLBAR.find((t) => t.shortcut === key)
+    if (tool) {
+      event.preventDefault()
+      format(tool.format)
     }
   }
 
@@ -110,20 +156,51 @@ function Form({ source, leaving, onReload, onClose }: FormProps) {
           </pre>
         </details>
       )}
-      <textarea
-        aria-label="Note text"
-        value={draft}
-        onChange={(e) => {
-          setDraft(e.target.value)
-          leaving.setDirty(asTyped(e.target.value) !== asTyped(source.body))
-          leaving.setConfirm(false)
-        }}
-        onKeyDown={onKeyDown}
-        readOnly={!source.writable}
-        spellCheck
-        rows={24}
-        className="min-h-[50vh] w-full resize-y rounded-lg border border-stone-300 bg-transparent p-3 font-mono text-sm leading-6 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-stone-700"
-      />
+      {/* Side by side when there's room (the main area's own width, not the window's), else stacked. */}
+      <div className="@container">
+        <div className="grid gap-4 @4xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">
+            <div role="toolbar" aria-label="Formatting" className="flex flex-wrap gap-1">
+              {TOOLBAR.map((tool) => (
+                <button
+                  key={tool.format}
+                  type="button"
+                  aria-label={tool.label}
+                  title={tool.shortcut ? `${tool.label} (${IS_MAC ? '⌘' : 'Ctrl+'}${tool.shortcut.toUpperCase()})` : tool.label}
+                  disabled={!source.writable}
+                  // Keep the text box's selection: a click would otherwise move focus first.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => format(tool.format)}
+                  className="min-w-8 rounded-md border border-stone-300 px-2 py-1 font-mono text-xs hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:hover:bg-stone-900"
+                >
+                  {tool.symbol}
+                </button>
+              ))}
+            </div>
+            <textarea
+              ref={box}
+              aria-label="Note text"
+              value={draft}
+              onChange={(e) => update(e.target.value)}
+              onKeyDown={onKeyDown}
+              readOnly={!source.writable}
+              spellCheck
+              rows={24}
+              className="min-h-[50vh] w-full resize-y rounded-lg border border-stone-300 bg-transparent p-3 font-mono text-sm leading-6 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-stone-700"
+            />
+          </div>
+          <section aria-label="Preview" className="min-w-0 rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700 @4xl:max-h-[75vh] @4xl:overflow-auto">
+            <h2 className="mb-2 text-xs font-medium tracking-wide text-stone-500 uppercase">Preview</h2>
+            <div className={note.kind === 'note' ? 'font-serif text-lg leading-8' : undefined}>
+              {previewText.trim() === '' ? (
+                <p className="text-stone-500">Nothing to show yet.</p>
+              ) : (
+                <Markdown text={previewText} links={note.links} preview />
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
       {problem && (
         <div role="alert" className="rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-900 dark:bg-rose-950 dark:text-rose-200">
           <p>
@@ -177,7 +254,9 @@ function Form({ source, leaving, onReload, onClose }: FormProps) {
  * was opened; if the file changed on disk since, nothing is saved and the
  * text stays on screen.
  */
-export default function NoteEditor({ path, leaving, onClose }: { path: string; leaving: Leaving; onClose: () => void }) {
+type EditorProps = { path: string; note: PreviewOf; leaving: Leaving; onClose: () => void }
+
+export default function NoteEditor({ path, note, leaving, onClose }: EditorProps) {
   // Always the file as it is now, never a cached copy.
   const source = useQuery({
     queryKey: ['note-source', path],
@@ -199,6 +278,7 @@ export default function NoteEditor({ path, leaving, onClose }: { path: string; l
     <Form
       key={source.data.version}
       source={source.data}
+      note={note}
       leaving={leaving}
       onReload={() => {
         leaving.setDirty(false)

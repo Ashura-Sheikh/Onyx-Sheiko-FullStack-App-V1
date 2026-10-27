@@ -52,7 +52,12 @@ const components: Components = {
 
 export type ResolvedLinks = Record<string, string | null>
 
-export default function Markdown({ text, links = {} }: { text: string; links?: ResolvedLinks }) {
+/**
+ * `preview`: the editor's live preview. A [[link]] added since the note was
+ * opened isn't in `links` yet (the server resolves links when it reads the
+ * note), so it says so instead of "No note named …".
+ */
+export default function Markdown({ text, links = {}, preview = false }: { text: string; links?: ResolvedLinks; preview?: boolean }) {
   const withLinks: Components = {
     ...components,
     a: ({ children, href }) => {
@@ -66,8 +71,9 @@ export default function Markdown({ text, links = {} }: { text: string; links?: R
       }
       const path = links[target]
       if (!path) {
+        const why = preview && path === undefined ? `"${target}" is checked when you save` : `No note named "${target}"`
         return (
-          <span className="text-stone-400 underline decoration-dotted" title={`No note named "${target}"`}>
+          <span className="text-stone-400 underline decoration-dotted" title={why}>
             {children}
           </span>
         )

@@ -80,7 +80,8 @@ function FocusItem({ item }: { item: NoteDetail }) {
   const task = item.task
   const where = [item.folder, task?.projects.join(', ')].filter(Boolean).join(' · ')
   return (
-    <article className="mx-auto max-w-3xl">
+    // Editing is wider, to fit the preview beside the text.
+    <article className={`mx-auto ${mode === 'edit' ? 'max-w-7xl' : 'max-w-3xl'}`}>
       <div className="mb-2 flex items-center gap-3 text-sm text-stone-500">
         <span className="min-w-0 flex-1 truncate">
           {where && `${where} · `}
@@ -91,7 +92,7 @@ function FocusItem({ item }: { item: NoteDetail }) {
       </div>
       <h1 className={`mb-4 tracking-tight ${task ? 'text-3xl font-semibold' : 'font-serif text-4xl'}`}>{item.title}</h1>
       {mode === 'edit' ? (
-        <NoteEditor path={item.path} leaving={leaving} onClose={closeEditor} />
+        <NoteEditor path={item.path} note={item} leaving={leaving} onClose={closeEditor} />
       ) : task ? (
         <>
           <div className="mb-8 flex flex-wrap gap-1.5">
