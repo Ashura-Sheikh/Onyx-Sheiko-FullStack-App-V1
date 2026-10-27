@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from onyx import config, summary
+from onyx import config, models, summary
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
@@ -36,7 +36,11 @@ def create_app(settings: Settings) -> FastAPI:
     app.state.vault = vault
     app.state.cache = cache
 
-    @app.post("/api/session", status_code=204)
+    @app.post(
+        "/api/session",
+        status_code=204,
+        responses={401: {"model": models.ErrorResponse, "description": "Wrong or used code"}},
+    )
     def sign_in(body: LaunchCode) -> Response:
         session = auth.redeem_launch_code(body.code)
         if session is None:
@@ -55,7 +59,7 @@ def create_app(settings: Settings) -> FastAPI:
         )
         return response
 
-    @app.get("/api/session")
+    @app.get("/api/session", response_model=models.SessionStatus)
     def session_status(request: Request) -> dict[str, bool]:
         return {"authenticated": auth.is_valid_session(session_from_scope(request.scope))}
 
@@ -71,22 +75,26 @@ def create_app(settings: Settings) -> FastAPI:
 
     # Read-only summaries. Each request reads the files again, so Home is never
     # stale; the cache will take this over when the vault gets large.
-    @app.get("/api/home")
+    @app.get("/api/home", response_model=models.HomeData)
     def home() -> dict:
         return summary.home(summary.read_summary(vault), today())
 
-    @app.get("/api/items")
+    @app.get("/api/items", response_model=models.ItemList)
     def items() -> dict:
         return {"items": summary.items(summary.read_summary(vault))}
 
-    @app.get("/api/note")
+    @app.get(
+        "/api/note",
+        response_model=models.NoteDetail,
+        responses={404: {"model": models.ErrorResponse, "description": "No such note"}},
+    )
     def note(path: str = Query(min_length=1, max_length=512)) -> dict:
         detail = summary.note_detail(vault, path)
         if detail is None:
             return JSONResponse({"detail": "Note not found"}, status_code=404)
         return detail
 
-    @app.get("/api/health")
+    @app.get("/api/health", response_model=models.Health)
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
