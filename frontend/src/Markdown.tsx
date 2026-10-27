@@ -1,9 +1,19 @@
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import { Link } from 'react-router'
+import { focusPath } from './api'
+import { remarkWikilinks, WIKILINK_PREFIX, wikilinkTarget } from './wikilinks'
 
 // Note text is untrusted (threat model T6). react-markdown builds React
 // elements, never HTML strings; raw HTML in a note is dropped (skipHtml);
 // links keep only safe protocols (its default urlTransform); images aren't
-// shown yet, their alt text is.
+// shown yet, their alt text is. [[Wikilinks]] become links to the note the
+// backend resolved them to; a link to a missing note is shown as such.
+
+/** Only our own wikilink addresses get past the default (safe-protocol) filter. */
+function urlTransform(url: string): string {
+  return url.startsWith(WIKILINK_PREFIX) ? url : defaultUrlTransform(url)
+}
+
 const components: Components = {
   h1: ({ children }) => <h2 className="mt-8 mb-3 text-2xl font-semibold tracking-tight">{children}</h2>,
   h2: ({ children }) => <h3 className="mt-7 mb-2 text-xl font-semibold tracking-tight">{children}</h3>,
@@ -27,11 +37,6 @@ const components: Components = {
       {children}
     </pre>
   ),
-  a: ({ children, href }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline dark:text-emerald-400">
-      {children}
-    </a>
-  ),
   img: ({ alt }) => <span className="text-stone-500">[{alt || 'image'}]</span>,
   hr: () => <hr className="my-6 border-stone-200 dark:border-stone-800" />,
   table: ({ children }) => (
@@ -45,9 +50,37 @@ const components: Components = {
   td: ({ children }) => <td className="border-b border-stone-200 px-2 py-1 dark:border-stone-800">{children}</td>,
 }
 
-export default function Markdown({ text }: { text: string }) {
+export type ResolvedLinks = Record<string, string | null>
+
+export default function Markdown({ text, links = {} }: { text: string; links?: ResolvedLinks }) {
+  const withLinks: Components = {
+    ...components,
+    a: ({ children, href }) => {
+      const target = wikilinkTarget(href)
+      if (target === null) {
+        return (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline dark:text-emerald-400">
+            {children}
+          </a>
+        )
+      }
+      const path = links[target]
+      if (!path) {
+        return (
+          <span className="text-stone-400 underline decoration-dotted" title={`No note named "${target}"`}>
+            {children}
+          </span>
+        )
+      }
+      return (
+        <Link to={focusPath(path)} className="text-violet-700 underline decoration-dotted dark:text-violet-400">
+          {children}
+        </Link>
+      )
+    },
+  }
   return (
-    <ReactMarkdown skipHtml components={components}>
+    <ReactMarkdown skipHtml remarkPlugins={[remarkWikilinks]} urlTransform={urlTransform} components={withLinks}>
       {text}
     </ReactMarkdown>
   )

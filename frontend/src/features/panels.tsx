@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { getHome } from '../api'
+import { Link } from 'react-router'
+import { getHome, notesPath } from '../api'
 import HistoryList from '../HistoryList'
 import { dateTime, duration, PRIORITY_LABELS, shortDate, STAGE_LABELS } from '../labels'
 import type { PanelContext } from './types'
@@ -36,7 +37,15 @@ export function DetailsPanel({ item }: PanelContext) {
           {task.time_to_close_minutes !== null && <Row label="Open → closed">{duration(task.time_to_close_minutes)}</Row>}
         </>
       )}
-      <Row label="Tags">{item.tags.length > 0 ? item.tags.map((t) => `#${t}`).join(' ') : 'none'}</Row>
+      <Row label="Tags">
+        {item.tags.length > 0
+          ? item.tags.map((t) => (
+              <Link key={t} to={notesPath({ tag: t })} className="ml-1 hover:underline">
+                #{t}
+              </Link>
+            ))
+          : 'none'}
+      </Row>
     </dl>
   )
 }

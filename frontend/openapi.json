@@ -210,6 +210,13 @@
       "NoteDetail": {
         "additionalProperties": false,
         "properties": {
+          "backlinks": {
+            "items": {
+              "$ref": "#/components/schemas/NoteRef"
+            },
+            "title": "Backlinks",
+            "type": "array"
+          },
           "body": {
             "title": "Body",
             "type": "string"
@@ -226,9 +233,31 @@
             "title": "Kind",
             "type": "string"
           },
+          "links": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Each [[link]] target in the body, and the note it opens (null: none)",
+            "title": "Links",
+            "type": "object"
+          },
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "related_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskRef"
+            },
+            "title": "Related Tasks",
+            "type": "array"
           },
           "tags": {
             "items": {
@@ -265,9 +294,86 @@
           "updated",
           "tags",
           "body",
+          "links",
+          "backlinks",
+          "related_tasks",
           "task"
         ],
         "title": "NoteDetail",
+        "type": "object"
+      },
+      "NoteList": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "notes"
+        ],
+        "title": "NoteList",
+        "type": "object"
+      },
+      "NoteRef": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title"
+        ],
+        "title": "NoteRef",
+        "type": "object"
+      },
+      "NoteSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated": {
+            "description": "ISO 8601 time",
+            "title": "Updated",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "folder",
+          "updated",
+          "tags"
+        ],
+        "title": "NoteSummary",
         "type": "object"
       },
       "RecentNote": {
@@ -507,6 +613,43 @@
         "title": "TaskHistoryEntry",
         "type": "object"
       },
+      "TaskRef": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "in-progress",
+                  "in-review",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "status"
+        ],
+        "title": "TaskRef",
+        "type": "object"
+      },
       "TaskSummary": {
         "additionalProperties": false,
         "properties": {
@@ -725,6 +868,24 @@
           }
         },
         "summary": "Note"
+      }
+    },
+    "/api/notes": {
+      "get": {
+        "operationId": "notes_api_notes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Notes"
       }
     },
     "/api/session": {

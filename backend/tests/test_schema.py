@@ -27,7 +27,14 @@ def test_every_json_response_has_a_named_model():
 
 def test_schema_lists_the_api_and_nothing_else():
     paths = set(openapi_schema()["paths"])
-    assert paths == {"/api/session", "/api/home", "/api/items", "/api/note", "/api/health"}
+    assert paths == {
+        "/api/session",
+        "/api/home",
+        "/api/items",
+        "/api/notes",
+        "/api/note",
+        "/api/health",
+    }
 
 
 def test_schema_file_is_plain_json():

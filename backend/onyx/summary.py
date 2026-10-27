@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import PurePosixPath
 
-from onyx import frontmatter
+from onyx import frontmatter, links
 from onyx.vault import NoteNotFound, PathRejected, Vault
 
 STAGES = ("open", "in-progress", "in-review", "done")
@@ -39,6 +39,8 @@ class Task:
     status: str | None
     priority: str | None
     due: date | None
+    tags: tuple[str, ...] = ()
+    links: tuple[str, ...] = ()  # link targets in the body and in `projects`
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,8 @@ class NoteInfo:
     title: str
     folder: str
     updated: datetime
+    tags: tuple[str, ...] = ()
+    links: tuple[str, ...] = ()  # link targets in the body
 
 
 @dataclass(frozen=True)
@@ -144,10 +148,25 @@ def read_summary(vault: Vault) -> VaultSummary:
             continue
         meta, body = frontmatter.split(note.text)
         title = _title(meta, body, note.path)
+        tags = tuple(t for t in _strings(meta.get("tags")) if t != "task")
+        body_links = links.find_links(body)
         if _is_task(meta):
             status = meta.get("status") if meta.get("status") in STAGES else None
             priority = meta.get("priority") if meta.get("priority") in PRIORITIES else None
-            tasks.append(Task(note.path, title, status, priority, _as_date(meta.get("due"))))
+            project_links = [
+                t for v in _strings(meta.get("projects")) if (t := links.link_from_value(v))
+            ]
+            tasks.append(
+                Task(
+                    note.path,
+                    title,
+                    status,
+                    priority,
+                    _as_date(meta.get("due")),
+                    tags,
+                    tuple(body_links + project_links),
+                )
+            )
             history.extend(_history(body, note.path, title))
         else:
             updated = _as_datetime(meta.get("dateModified"))
@@ -157,7 +176,16 @@ def read_summary(vault: Vault) -> VaultSummary:
                 except NoteNotFound:
                     continue
             folder = str(PurePosixPath(note.path).parent)
-            notes.append(NoteInfo(note.path, title, "" if folder == "." else folder, updated))
+            notes.append(
+                NoteInfo(
+                    note.path,
+                    title,
+                    "" if folder == "." else folder,
+                    updated,
+                    tags,
+                    tuple(body_links),
+                )
+            )
     return VaultSummary(tasks, notes, history)
 
 
@@ -262,6 +290,8 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
     shown = frontmatter.without_first_heading(
         frontmatter.without_sections(body, HIDDEN_SECTIONS), title
     ).strip("\n")
+    vault_summary = read_summary(vault)
+    index = links.LinkIndex(list(listed))
     detail = {
         "path": note.path,
         "title": title,
@@ -270,6 +300,18 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
         "updated": (_as_datetime(meta.get("dateModified")) or modified).isoformat(),
         "tags": [t for t in _strings(meta.get("tags")) if t != "task"],
         "body": shown,
+        # Every link target in the shown body, and the note it opens (None: no such note).
+        "links": {t: index.resolve(t, note.path) for t in links.find_links(shown)},
+        "backlinks": [
+            {"path": n.path, "title": n.title}
+            for n in sorted(vault_summary.notes, key=lambda n: n.title.lower())
+            if n.path != note.path and _links_to(n.links, n.path, note.path, index)
+        ],
+        "related_tasks": [
+            {"path": t.path, "title": t.title, "status": t.status}
+            for t in sorted(vault_summary.tasks, key=lambda t: t.title.lower())
+            if t.path != note.path and _links_to(t.links, t.path, note.path, index)
+        ],
         "task": None,
     }
     if detail["kind"] == "task":
@@ -290,3 +332,23 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
             ],
         }
     return detail
+
+
+def _links_to(
+    targets: tuple[str, ...], from_path: str, to_path: str, index: links.LinkIndex
+) -> bool:
+    return any(index.resolve(t, from_path) == to_path for t in targets)
+
+
+def notes_list(summary: VaultSummary) -> list[dict]:
+    """Every note (not tasks), for the Notes page: its folder tree, list and tags."""
+    return [
+        {
+            "path": n.path,
+            "title": n.title,
+            "folder": n.folder,
+            "updated": n.updated.isoformat(),
+            "tags": list(n.tags),
+        }
+        for n in sorted(summary.notes, key=lambda n: n.path)
+    ]

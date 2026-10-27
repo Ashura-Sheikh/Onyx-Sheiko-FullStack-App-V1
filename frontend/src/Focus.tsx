@@ -4,13 +4,13 @@ import { Link, useSearchParams } from 'react-router'
 import { ApiError, getNote, type NoteDetail } from './api'
 import { useCurrentItem } from './currentItem'
 import { dateTime, shortDate } from './labels'
-import Markdown from './Markdown'
+import Markdown, { type ResolvedLinks } from './Markdown'
 import { PriorityPill, StagePill } from './StagePill'
 
 // Longer task bodies start folded to a short summary.
 export const SUMMARY_CHARS = 600
 
-function TaskSummary({ body }: { body: string }) {
+function TaskSummary({ body, links }: { body: string; links: ResolvedLinks }) {
   const [expanded, setExpanded] = useState(false)
   if (body.trim() === '') return <p className="text-stone-500">No description.</p>
   const long = body.length > SUMMARY_CHARS
@@ -23,7 +23,7 @@ function TaskSummary({ body }: { body: string }) {
         data-testid="summary-body"
         className={long && !expanded ? 'relative max-h-48 overflow-hidden' : undefined}
       >
-        <Markdown text={body} />
+        <Markdown text={body} links={links} />
         {long && !expanded && (
           <div className="absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-stone-50 dark:from-stone-950" />
         )}
@@ -57,11 +57,11 @@ function FocusItem({ item }: { item: NoteDetail }) {
             <StagePill stage={task.status} />
             <PriorityPill priority={task.priority} />
           </div>
-          <TaskSummary body={item.body} />
+          <TaskSummary body={item.body} links={item.links} />
         </>
       ) : (
         <div className="font-serif text-lg leading-8">
-          {item.body.trim() === '' ? <p className="text-stone-500">This note is empty.</p> : <Markdown text={item.body} />}
+          {item.body.trim() === '' ? <p className="text-stone-500">This note is empty.</p> : <Markdown text={item.body} links={item.links} />}
         </div>
       )}
     </article>

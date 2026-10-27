@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { HomeData, Item, NoteDetail } from './api'
+import type { HomeData, Item, NoteDetail, NoteSummary } from './api'
 import { LAYOUT_KEY } from './layout'
 import { THEME_KEY } from './theme'
 
@@ -41,7 +41,10 @@ const NOTE: NoteDetail = {
   kind: 'note',
   updated: '2031-04-15T09:12:00+00:00',
   tags: ['atlas', 'planning'],
-  body: 'Atlas is a sample project.\n\n## Goals\n\n- Ship the **reading list**\n- See [[Atlas architecture]]',
+  body: 'Atlas is a sample project.\n\n## Goals\n\n- Ship the **reading list**\n- See [[Atlas architecture]] and [[Nowhere]]\n\n`[[In code]]`',
+  links: { 'Atlas architecture': 'Projects/Atlas architecture.md', Nowhere: null },
+  backlinks: [{ path: 'Meetings/Weekly sync.md', title: 'Weekly sync' }],
+  related_tasks: [{ path: 'Tasks/a.md', title: 'Plan weekly sync agenda', status: 'in-progress' }],
   task: null,
 }
 
@@ -53,6 +56,9 @@ const TASK: NoteDetail = {
   updated: '2031-04-14T10:00:00+00:00',
   tags: [],
   body: 'Short description of the task.',
+  links: {},
+  backlinks: [],
+  related_tasks: [],
   task: {
     status: 'in-progress',
     priority: 'high',
@@ -379,7 +385,13 @@ describe('focus view', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Atlas kickoff' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Goals' })).toBeInTheDocument()
     expect(screen.getByText('reading list').tagName).toBe('STRONG')
-    expect(screen.getByText(/Atlas architecture/)).toBeInTheDocument() // wikilinks stay text until #8
+    expect(screen.getByRole('link', { name: 'Atlas architecture' })).toHaveAttribute(
+      'href',
+      '/focus?path=Projects%2FAtlas%20architecture.md',
+    )
+    expect(screen.getByText('Nowhere').tagName).toBe('SPAN') // no such note: not a link
+    expect(screen.getByTitle('No note named "Nowhere"')).toBeInTheDocument()
+    expect(screen.getByText('[[In code]]').tagName).toBe('CODE') // code is never a link
   })
 
   it('shows a task with its stage, priority and summary', async () => {
@@ -466,7 +478,7 @@ describe('panels', () => {
     const { unmount } = render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'Remove Details panel' }))
     expect(screen.queryByRole('region', { name: 'Details' })).toBeNull()
-    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')).toEqual({ visible: ['history'], sideOpen: true })
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}').visible).toEqual(['backlinks', 'related-tasks', 'history'])
 
     unmount()
     fakeServer({ ...signedIn, ...withHome })
@@ -479,7 +491,7 @@ describe('panels', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Details' }))
     expect(await screen.findByRole('region', { name: 'Details' })).toBeInTheDocument()
-    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}').visible).toEqual(['details', 'history'])
+    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}').visible).toEqual(['details', 'backlinks', 'related-tasks', 'history'])
   })
 
   it('hides and shows the side area', async () => {
@@ -499,7 +511,107 @@ describe('panels', () => {
     fakeServer({ ...signedIn, ...withHome })
     render(<App />)
     await screen.findByRole('region', { name: 'Details' })
-    // One between the page and the side area, one between the two panels.
-    expect(screen.getAllByRole('separator')).toHaveLength(2)
+    // One between the page and the side area, one between each pair of the 4 default panels.
+    expect(screen.getAllByRole('separator')).toHaveLength(4)
+  })
+})
+
+const NOTES: NoteSummary[] = [
+  { path: 'Projects/Atlas kickoff.md', title: 'Atlas kickoff', folder: 'Projects', updated: '2031-04-15T09:12:00+00:00', tags: ['atlas', 'planning'] },
+  { path: 'Projects/Archive/Old plan.md', title: 'Old plan', folder: 'Projects/Archive', updated: '2031-03-01T09:00:00+00:00', tags: ['atlas'] },
+  { path: 'Meetings/Weekly sync.md', title: 'Weekly sync', folder: 'Meetings', updated: '2031-04-16T10:00:00+00:00', tags: [] },
+  { path: 'Inbox.md', title: 'Inbox', folder: '', updated: '2031-04-16T07:55:00+00:00', tags: ['planning'] },
+]
+const withNotes = { 'GET /api/notes': { status: 200, body: { notes: NOTES } } }
+
+describe('Notes', () => {
+  it('is in the navigation and lists every note, newest first', async () => {
+    fakeServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('link', { name: 'Notes' }))
+    expect(await screen.findByRole('heading', { name: 'All notes' })).toBeInTheDocument()
+    const list = within(screen.getByRole('region', { name: 'All notes' }))
+    expect(list.getAllByRole('listitem').map((li) => li.querySelector('a')?.textContent)).toEqual([
+      'Weekly sync',
+      'Inbox',
+      'Atlas kickoff',
+      'Old plan',
+    ])
+    expect(screen.getByText('4 notes')).toBeInTheDocument()
+  })
+
+  it('shows the folder tree, and a folder lists its notes and its subfolders\' notes', async () => {
+    window.history.replaceState(null, '', '/notes')
+    fakeServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    const tree = within(await screen.findByRole('navigation', { name: 'Folders' }))
+    await userEvent.click(tree.getByRole('link', { name: 'Projects' }))
+    const list = within(await screen.findByRole('region', { name: 'Projects' }))
+    expect(list.getAllByRole('listitem')).toHaveLength(2)
+    expect(tree.getByRole('link', { name: 'Projects' })).toHaveAttribute('aria-current', 'page')
+    expect(tree.getByRole('link', { name: 'Archive' })).toBeInTheDocument()
+    await userEvent.click(tree.getByRole('button', { name: 'Collapse Projects' }))
+    expect(tree.queryByRole('link', { name: 'Archive' })).toBeNull()
+  })
+
+  it('filters by tag from a note\'s tag', async () => {
+    window.history.replaceState(null, '', '/notes')
+    fakeServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    const list = within(await screen.findByRole('region', { name: 'All notes' }))
+    await userEvent.click(list.getAllByRole('link', { name: '#planning' })[0])
+    const tagged = within(await screen.findByRole('region', { name: '#planning' }))
+    expect(tagged.getAllByRole('listitem').map((li) => li.querySelector('a')?.textContent)).toEqual(['Inbox', 'Atlas kickoff'])
+    await userEvent.click(screen.getByRole('link', { name: 'Show all' }))
+    expect(await screen.findByRole('heading', { name: 'All notes' })).toBeInTheDocument()
+  })
+
+  it('shows note titles as text, never as HTML', async () => {
+    window.history.replaceState(null, '', '/notes')
+    const hostile = '<img src=x onerror=alert(1)>'
+    fakeServer({ ...signedIn, ...withHome, 'GET /api/notes': { status: 200, body: { notes: [{ ...NOTES[0], title: hostile }] } } })
+    render(<App />)
+    expect((await screen.findAllByText(hostile)).length).toBeGreaterThan(0)
+    expect(document.querySelector('img')).toBeNull()
+  })
+})
+
+describe('note panels', () => {
+  it('Backlinks and Related tasks show what links to the open note', async () => {
+    openFocus(NOTE)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(NOTE) })
+    render(<App />)
+    const backlinks = within(await screen.findByRole('region', { name: 'Backlinks' }))
+    expect(await backlinks.findByRole('link', { name: 'Weekly sync' })).toHaveAttribute('href', '/focus?path=Meetings%2FWeekly%20sync.md')
+    const tasks = within(screen.getByRole('region', { name: 'Related tasks' }))
+    expect(tasks.getByRole('link', { name: 'Plan weekly sync agenda' })).toBeInTheDocument()
+    expect(tasks.getByText('In progress')).toBeInTheDocument()
+  })
+
+  it('say when nothing links to the note', async () => {
+    openFocus(TASK)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(TASK) })
+    render(<App />)
+    expect(await screen.findByText('No notes link here.')).toBeInTheDocument()
+    expect(screen.getByText('No tasks link here.')).toBeInTheDocument()
+  })
+
+  it('Tags can be added and lists every tag with its count', async () => {
+    fakeServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    ;(await screen.findByRole('button', { name: '+ Add panel' })).focus()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Tags' }))
+    const tags = within(await screen.findByRole('region', { name: 'Tags' }))
+    expect(await tags.findByRole('link', { name: '#atlas 2' })).toHaveAttribute('href', '/notes?tag=atlas')
+    expect(tags.getByRole('link', { name: '#planning 2' })).toBeInTheDocument()
+  })
+
+  it('a tag in Details lists its notes', async () => {
+    openFocus(NOTE)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(NOTE) })
+    render(<App />)
+    const details = within(await screen.findByRole('region', { name: 'Details' }))
+    expect(await details.findByRole('link', { name: '#atlas' })).toHaveAttribute('href', '/notes?tag=atlas')
   })
 })

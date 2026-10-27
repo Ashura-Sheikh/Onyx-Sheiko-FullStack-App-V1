@@ -346,6 +346,9 @@ def test_note_detail_for_a_note(tmp_path):
         "updated": "2031-04-15T10:00:00+00:00",
         "tags": ["atlas", "design"],
         "body": "Body text.",
+        "links": {},
+        "backlinks": [],
+        "related_tasks": [],
         "task": None,
     }
 
