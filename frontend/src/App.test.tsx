@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { HomeData, Item, NoteDetail, NoteSummary } from './api'
+import type { HomeData, Item, NoteDetail, NoteSummary, SearchResult } from './api'
 import { LAYOUT_KEY } from './layout'
 import { THEME_KEY } from './theme'
 
@@ -613,5 +613,121 @@ describe('note panels', () => {
     render(<App />)
     const details = within(await screen.findByRole('region', { name: 'Details' }))
     expect(await details.findByRole('link', { name: '#atlas' })).toHaveAttribute('href', '/notes?tag=atlas')
+  })
+})
+
+const SEARCH_RESULTS: SearchResult[] = [
+  {
+    path: 'Projects/Atlas kickoff.md',
+    title: 'Atlas kickoff',
+    kind: 'note',
+    folder: 'Projects',
+    snippet: [
+      { text: 'Ship the ', match: false },
+      { text: 'reading', match: true },
+      { text: ' list', match: false },
+    ],
+  },
+  { path: 'Tasks/a.md', title: 'Plan weekly sync agenda', kind: 'task', folder: 'Tasks', snippet: [] },
+]
+
+/** A server whose search answers every query with `results`, recording what was searched. */
+function searchServer(routes: Record<string, Reply>, results: SearchResult[] = SEARCH_RESULTS) {
+  const searched: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string, init: RequestInit) => {
+      const method = init.method ?? 'GET'
+      if (path.startsWith('/api/search?q=')) {
+        searched.push(decodeURIComponent(path.slice('/api/search?q='.length)))
+        return Response.json({ results })
+      }
+      const reply = routes[`${method} ${path}`]
+      if (!reply) throw new Error(`unexpected call ${method} ${path}`)
+      return new Response(reply.body === undefined ? null : JSON.stringify(reply.body), { status: reply.status })
+    }),
+  )
+  return searched
+}
+
+describe('search', () => {
+  it('⌘K searches titles and text once typing pauses, with snippets', async () => {
+    const searched = searchServer({ ...signedIn, ...withHome, ...withItems, ...withNote(NOTE) })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Due today or overdue' })
+    await userEvent.keyboard('{Meta>}k{/Meta}')
+    await userEvent.type(await screen.findByRole('combobox'), 'reading')
+    const option = await screen.findByRole('option', { name: /Atlas kickoff/ })
+    expect(within(option).getByText('reading').tagName).toBe('MARK')
+    expect(searched).toEqual(['reading']) // one search, not one per key
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Atlas kickoff' })).toBeInTheDocument()
+  })
+
+  it('⌘K keeps filtering titles below 2 characters, without searching', async () => {
+    const searched = searchServer({ ...signedIn, ...withHome, ...withItems })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Due today or overdue' })
+    await userEvent.keyboard('{Meta>}k{/Meta}')
+    await userEvent.type(await screen.findByRole('combobox'), 'p')
+    expect(await screen.findByRole('option', { name: /Plan weekly sync agenda/ })).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 250))
+    expect(searched).toEqual([])
+  })
+
+  it('the Notes page searches, and keeps the search in the address', async () => {
+    window.history.replaceState(null, '', '/notes')
+    const searched = searchServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    // In jsdom every element has zero size, so the panel library takes any
+    // click for a grab of a resize handle and moves focus. Focus the box and
+    // type, as a keyboard user would.
+    ;(await screen.findByRole('searchbox', { name: 'Search notes and tasks' })).focus()
+    await userEvent.keyboard('reading')
+    const results = within(await screen.findByRole('region', { name: 'Search' }))
+    expect(await results.findByRole('link', { name: 'Atlas kickoff' })).toHaveAttribute('href', '/focus?path=Projects%2FAtlas%20kickoff.md')
+    expect(results.getByText('Task · Tasks')).toBeInTheDocument()
+    expect(window.location.search).toBe('?q=reading')
+    expect(searched.at(-1)).toBe('reading')
+    expect(screen.getByRole('searchbox')).toHaveFocus() // typing isn't interrupted
+    await userEvent.keyboard('{Control>}a{/Control}{Backspace}')
+    expect(await screen.findByRole('heading', { name: 'All notes' })).toBeInTheDocument()
+  })
+
+  it('"Show all" clears the search box', async () => {
+    window.history.replaceState(null, '', '/notes?q=atlas')
+    searchServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    await screen.findByRole('link', { name: 'Atlas kickoff' })
+    await userEvent.click(screen.getByRole('link', { name: 'Show all' }))
+    expect(await screen.findByRole('heading', { name: 'All notes' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  it('opens a search from the address', async () => {
+    window.history.replaceState(null, '', '/notes?q=atlas')
+    const searched = searchServer({ ...signedIn, ...withHome, ...withNotes })
+    render(<App />)
+    expect(await screen.findByRole('link', { name: 'Atlas kickoff' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toHaveValue('atlas')
+    expect(searched).toEqual(['atlas'])
+  })
+
+  it('says when nothing matches', async () => {
+    window.history.replaceState(null, '', '/notes?q=zzz')
+    searchServer({ ...signedIn, ...withHome, ...withNotes }, [])
+    render(<App />)
+    expect(await screen.findByText('No matches.')).toBeInTheDocument()
+  })
+
+  it('shows snippet text from a note as text, never as HTML', async () => {
+    window.history.replaceState(null, '', '/notes?q=img')
+    const hostile = '<img src=x onerror=alert(1)>'
+    searchServer({ ...signedIn, ...withHome, ...withNotes }, [
+      { ...SEARCH_RESULTS[0], snippet: [{ text: hostile, match: true }] },
+    ])
+    render(<App />)
+    expect(await screen.findByText(hostile)).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
   })
 })

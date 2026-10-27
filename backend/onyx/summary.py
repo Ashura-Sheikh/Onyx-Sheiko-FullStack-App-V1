@@ -352,3 +352,20 @@ def notes_list(summary: VaultSummary) -> list[dict]:
         }
         for n in sorted(summary.notes, key=lambda n: n.path)
     ]
+
+
+def searchable(text: str, path: str) -> tuple[str, str, str, str]:
+    """(title, kind, folder, body) of a note, as search sees it: the body the
+    focus view shows, without frontmatter, the title heading or hidden sections."""
+    meta, body = frontmatter.split(text)
+    title = _title(meta, body, path)
+    shown = frontmatter.without_first_heading(
+        frontmatter.without_sections(body, HIDDEN_SECTIONS), title
+    )
+    folder = str(PurePosixPath(path).parent)
+    return (
+        title,
+        "task" if _is_task(meta) else "note",
+        "" if folder == "." else folder,
+        shown.strip("\n"),
+    )

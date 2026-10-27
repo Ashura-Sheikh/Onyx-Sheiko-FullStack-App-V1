@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { Dialog } from 'radix-ui'
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react'
-import { getItems } from './api'
+import { getItems, search, SEARCH_MIN_CHARS, type SearchResult } from './api'
+import Snippet from './Snippet'
+import { useDebounced } from './useDebounced'
 import { isPaletteShortcut } from './shortcuts'
 
 export type Command = { id: string; label: string; run: () => void }
 
 type Option =
   | { kind: 'command'; key: string; label: string; run: () => void }
-  | { kind: 'note' | 'task'; key: string; label: string; path: string }
+  | { kind: 'note' | 'task'; key: string; label: string; path: string; snippet?: SearchResult['snippet'] }
 
 const MAX_RESULTS = 8
 const KIND_LABELS = { command: 'Go', note: 'Note', task: 'Task' } as const
@@ -29,6 +31,10 @@ export default function CommandPalette({
   const listId = useId()
   // Loaded when the palette first opens, then kept for this visit.
   const items = useQuery({ queryKey: ['items'], queryFn: getItems, enabled: open })
+  // From SEARCH_MIN_CHARS on, notes and tasks come from search (titles and content).
+  const searchText = useDebounced(query.trim(), 150)
+  const searching = open && searchText.length >= SEARCH_MIN_CHARS
+  const results = useQuery({ queryKey: ['search', searchText], queryFn: () => search(searchText), enabled: searching })
 
   useEffect(() => {
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -46,12 +52,18 @@ export default function CommandPalette({
     const found: Option[] = commands
       .filter((c) => matches(c.label))
       .map((c) => ({ kind: 'command', key: `command:${c.id}`, label: c.label, run: c.run }))
+    if (searching) {
+      for (const r of (results.data ?? []).slice(0, MAX_RESULTS)) {
+        found.push({ kind: r.kind, key: `${r.kind}:${r.path}`, label: r.title, path: r.path, snippet: r.snippet })
+      }
+      return found
+    }
     for (const item of items.data ?? []) {
       if (found.length >= commands.length + MAX_RESULTS) break
       if (matches(item.title)) found.push({ kind: item.kind, key: `${item.kind}:${item.path}`, label: item.title, path: item.path })
     }
     return found
-  }, [query, commands, items.data])
+  }, [query, commands, items.data, searching, results.data])
 
   function changeOpen(next: boolean) {
     if (next) {
@@ -122,13 +134,20 @@ export default function CommandPalette({
                 className={`flex cursor-default items-center gap-2 rounded px-3 py-2 ${index === activeIndex ? 'bg-stone-100 dark:bg-stone-800' : ''}`}
               >
                 <span className="w-10 shrink-0 text-xs text-stone-500">{KIND_LABELS[option.kind]}</span>
-                <span className="truncate">{option.label}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{option.label}</span>
+                  {option.kind !== 'command' && option.snippet && (
+                    <span className="block truncate">
+                      <Snippet parts={option.snippet} />
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
             {options.length === 0 && <li className="px-3 py-2 text-stone-500">No matches.</li>}
           </ul>
           <p className="border-t border-stone-200 px-4 py-2 text-xs text-stone-500 dark:border-stone-700">
-            {items.isError
+            {items.isError || results.isError
               ? "Notes and tasks couldn't be loaded."
               : '↑↓ to move, Enter to open, Esc to close.'}
           </p>
