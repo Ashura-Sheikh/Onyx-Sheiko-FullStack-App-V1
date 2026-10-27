@@ -7,6 +7,7 @@ change that (threat model: local, single-user).
 """
 
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 HOST = "127.0.0.1"
@@ -43,6 +44,9 @@ class Settings:
     cache_dir: Path | None = None
     # The built frontend (npm run build); tests point this at a temporary folder.
     frontend_dist: Path | None = None  # None = DEFAULT_FRONTEND_DIST
+    # The date Home treats as today. None = the computer's local date. Set it
+    # (--today) to use the made-up dev-vault, whose dates are in 2031.
+    today: date | None = None
 
     @property
     def allowed_origins(self) -> frozenset[str]:
@@ -50,7 +54,9 @@ class Settings:
         return frozenset(f"http://{host}:{self.port}" for host in self.allowed_hosts)
 
 
-def load_settings(vault: str | Path | None, port: int = DEFAULT_PORT) -> Settings:
+def load_settings(
+    vault: str | Path | None, port: int = DEFAULT_PORT, today: str | None = None
+) -> Settings:
     if vault is None or str(vault).strip() == "":
         raise ConfigError("A vault folder is required (--vault PATH or ONYX_VAULT).")
     path = Path(vault).expanduser()
@@ -60,4 +66,10 @@ def load_settings(vault: str | Path | None, port: int = DEFAULT_PORT) -> Setting
         raise ConfigError(f"Vault path is not a folder: {path}")
     if not 1024 <= port <= 65535:
         raise ConfigError("Port must be between 1024 and 65535.")
-    return Settings(vault=path.resolve(), port=port)
+    fixed_today = None
+    if today is not None:
+        try:
+            fixed_today = date.fromisoformat(today)
+        except ValueError as error:
+            raise ConfigError("--today must be a date like 2031-04-16.") from error
+    return Settings(vault=path.resolve(), port=port, today=fixed_today)
