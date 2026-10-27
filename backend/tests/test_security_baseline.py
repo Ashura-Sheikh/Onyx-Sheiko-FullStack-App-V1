@@ -358,7 +358,7 @@ def test_launch_code_is_printed_immediately_when_output_is_piped():
         # and the test fails after 15 seconds instead of hanging.
         output = b""
         deadline = time.monotonic() + 15
-        while output.count(b"\n") < 4:
+        while output.count(b"\n") < 5:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -369,10 +369,11 @@ def test_launch_code_is_printed_immediately_when_output_is_piped():
                     break
                 output += chunk
         lines = output.decode().splitlines()
-        assert len(lines) >= 4, "address, vault, cache and launch code arrive while the server runs"
+        assert len(lines) >= 5, "address, vault, cache, writes and code arrive while it runs"
         assert lines[0] == f"Onyx Sheiko: http://127.0.0.1:{port}"
         assert lines[2].startswith("Cache: ")
-        assert lines[3].startswith("Launch code (one use, 10 minutes): ")
+        assert lines[3] == "Writes: off"
+        assert lines[4].startswith("Launch code (one use, 10 minutes): ")
         assert proc.poll() is None, "server is still running"
     finally:
         proc.terminate()

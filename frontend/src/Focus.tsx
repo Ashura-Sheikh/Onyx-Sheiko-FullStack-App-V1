@@ -5,6 +5,7 @@ import { ApiError, getNote, type NoteDetail } from './api'
 import { useCurrentItem } from './currentItem'
 import { dateTime, shortDate } from './labels'
 import Markdown, { type ResolvedLinks } from './Markdown'
+import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
 
 // Longer task bodies start folded to a short summary.
@@ -41,17 +42,57 @@ function TaskSummary({ body, links }: { body: string; links: ResolvedLinks }) {
   )
 }
 
+type Mode = 'read' | 'edit'
+
+function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
+  return (
+    <div role="group" aria-label="Mode" className="inline-flex rounded-full border border-stone-300 p-0.5 text-sm dark:border-stone-700">
+      {(['read', 'edit'] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={mode === m}
+          onClick={() => onChange(m)}
+          className={`rounded-full px-3 py-1 ${mode === m ? 'bg-stone-200 font-medium dark:bg-stone-800' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900'}`}
+        >
+          {m === 'read' ? 'Read' : 'Edit'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FocusItem({ item }: { item: NoteDetail }) {
+  const [mode, setModeNow] = useState<Mode>('read')
+  const [dirty, setDirty] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const leaving: Leaving = { dirty, setDirty, confirm, setConfirm }
+  function setMode(next: Mode) {
+    // Leaving the editor with unsaved text asks first (in the editor).
+    if (mode === 'edit' && next === 'read' && dirty) return setConfirm(true)
+    setModeNow(next)
+  }
+  function closeEditor() {
+    setDirty(false)
+    setConfirm(false)
+    setModeNow('read')
+  }
   const task = item.task
   const where = [item.folder, task?.projects.join(', ')].filter(Boolean).join(' · ')
   return (
     <article className="mx-auto max-w-3xl">
-      <div className="mb-2 text-sm text-stone-500">
-        {where && `${where} · `}
-        {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
+      <div className="mb-2 flex items-center gap-3 text-sm text-stone-500">
+        <span className="min-w-0 flex-1 truncate">
+          {where && `${where} · `}
+          {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
+        </span>
+        {/* Read while editing goes through the editor, which asks before dropping unsaved text. */}
+        <ModeSwitch mode={mode} onChange={setMode} />
       </div>
       <h1 className={`mb-4 tracking-tight ${task ? 'text-3xl font-semibold' : 'font-serif text-4xl'}`}>{item.title}</h1>
-      {task ? (
+      {mode === 'edit' ? (
+        <NoteEditor path={item.path} leaving={leaving} onClose={closeEditor} />
+      ) : task ? (
         <>
           <div className="mb-8 flex flex-wrap gap-1.5">
             <StagePill stage={task.status} />
@@ -68,7 +109,7 @@ function FocusItem({ item }: { item: NoteDetail }) {
   )
 }
 
-/** Mockup C's focus view: one note or task, full width, read-only for now. */
+/** Mockup C's focus view: one note or task, full width. Read, or Edit its body. */
 export default function Focus() {
   const [params] = useSearchParams()
   const path = params.get('path') ?? ''
@@ -101,5 +142,6 @@ export default function Focus() {
       </p>
     )
   }
-  return <FocusItem item={note.data} />
+  // A different note starts in Read mode.
+  return <FocusItem key={note.data.path} item={note.data} />
 }

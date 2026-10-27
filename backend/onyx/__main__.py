@@ -22,8 +22,13 @@ def parse_args(argv: list[str] | None = None) -> Settings:
     parser.add_argument(
         "--today", help="treat this date (YYYY-MM-DD) as today; for the made-up dev-vault"
     )
+    parser.add_argument(
+        "--allow-writes",
+        action="store_true",
+        help="let the app change notes (off by default; refused for folders inside the repo)",
+    )
     args = parser.parse_args(argv)
-    return load_settings(args.vault, args.port, args.today)
+    return load_settings(args.vault, args.port, args.today, args.allow_writes)
 
 
 def uvicorn_config(app, settings: Settings) -> uvicorn.Config:
@@ -48,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Onyx Sheiko: http://{HOST}:{settings.port}", flush=True)
     print(f"Vault: {settings.vault}", flush=True)
     print(f"Cache: {app.state.cache.path}", flush=True)
+    print(f"Writes: {'on (--allow-writes)' if settings.allow_writes else 'off'}", flush=True)
     if settings.today is not None:
         print(f"Today (fixed with --today): {settings.today.isoformat()}", flush=True)
     print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}", flush=True)

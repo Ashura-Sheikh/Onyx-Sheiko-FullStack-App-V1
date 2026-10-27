@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { HomeData, Item, NoteDetail, NoteSummary, SearchResult } from './api'
+import type { HomeData, Item, NoteDetail, NoteSource, NoteSummary, SearchResult } from './api'
 import { LAYOUT_KEY } from './layout'
 import { THEME_KEY } from './theme'
 
@@ -729,5 +729,183 @@ describe('search', () => {
     render(<App />)
     expect(await screen.findByText(hostile)).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
+  })
+})
+
+describe('editing a note', () => {
+  const V1 = 'a'.repeat(64)
+  const V2 = 'b'.repeat(64)
+  const SOURCE: NoteSource = {
+    path: NOTE.path,
+    frontmatter: '---\nsynthetic: true\ntags:\n  - atlas\n---\n',
+    body: '\n# Atlas kickoff\n\nAtlas is a sample project.\n\n## Status History\n\n- kept\n',
+    version: V1,
+    writable: true,
+  }
+  const sourceRoute = (source: NoteSource): Record<string, Reply> => ({
+    [`GET /api/note/source?path=${encodeURIComponent(source.path)}`]: { status: 200, body: source },
+  })
+
+  function editServer(extra: Record<string, Reply> = {}, source: NoteSource = SOURCE) {
+    const routes: Record<string, Reply> = {
+      ...signedIn,
+      ...withHome,
+      ...withItems,
+      ...withNote(NOTE),
+      ...sourceRoute(source),
+      ...extra,
+    }
+    return { routes, calls: fakeServer(routes) }
+  }
+
+  // In jsdom the panel library takes any click for a grab of a resize handle
+  // and moves focus (see the Notes search test), so focus the box and type at
+  // its end, as a keyboard user would.
+  async function typeIn(box: HTMLTextAreaElement, text: string) {
+    box.focus()
+    box.setSelectionRange(box.value.length, box.value.length)
+    await userEvent.keyboard(text)
+  }
+
+  async function startEditing() {
+    openFocus(NOTE)
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    return (await screen.findByRole('textbox', { name: 'Note text' })) as HTMLTextAreaElement
+  }
+
+  it('Edit opens the whole body as written, with the fields shown but not editable', async () => {
+    editServer()
+    const box = await startEditing()
+    expect(box.value).toBe(SOURCE.body) // Status History included, title heading included
+    expect(screen.getByTestId('frontmatter')).toHaveTextContent('synthetic: true')
+    expect(screen.getByText('Fields (kept as they are; edit them in Obsidian)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('saves the body with the version it opened, then shows the note again', async () => {
+    const { calls } = editServer({ 'PUT /api/note': { status: 200, body: { path: NOTE.path, version: V2 } } })
+    const box = await startEditing()
+    await typeIn(box, 'More text.')
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+    const notesBefore = calls.filter((c) => c.path.startsWith('/api/note?')).length
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('heading', { name: 'Goals' })).toBeInTheDocument() // Read mode again
+    const put = calls.find((c) => c.method === 'PUT')!
+    expect(put.path).toBe('/api/note')
+    expect(JSON.parse(put.body!)).toEqual({ path: NOTE.path, body: `${SOURCE.body}More text.`, version: V1 })
+    expect(calls.filter((c) => c.path.startsWith('/api/note?')).length).toBeGreaterThan(notesBefore) // read again
+  })
+
+  it.each(['Meta', 'Control'])('%s+S saves', async (key) => {
+    const { calls } = editServer({ 'PUT /api/note': { status: 200, body: { path: NOTE.path, version: V2 } } })
+    const box = await startEditing()
+    await typeIn(box, `x{${key}>}s{/${key}}`)
+    await screen.findByRole('heading', { name: 'Goals' })
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1)
+  })
+
+  it('a conflict keeps the text, saves nothing, and offers Reload and Copy', async () => {
+    const { routes } = editServer({
+      'PUT /api/note': { status: 409, body: { detail: 'The note changed on disk since you opened it.', version: V2 } },
+    })
+    const box = await startEditing()
+    await typeIn(box, 'My edit.')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('This note changed on disk since you opened it, so nothing was saved. Your text is still here.')
+    expect(box.value).toBe(`${SOURCE.body}My edit.`)
+
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await userEvent.click(within(alert).getByRole('button', { name: 'Copy my text' }))
+    expect(writeText).toHaveBeenCalledWith(`${SOURCE.body}My edit.`)
+    expect(await screen.findByText('Copied.')).toBeInTheDocument()
+
+    // Reload: the file as it is now replaces the edit.
+    Object.assign(routes, sourceRoute({ ...SOURCE, body: 'Changed in Obsidian.\n', version: V2 }))
+    await userEvent.click(within(alert).getByRole('button', { name: 'Reload (discard my edit)' }))
+    await waitFor(() => expect((screen.getByRole('textbox', { name: 'Note text' }) as HTMLTextAreaElement).value).toBe('Changed in Obsidian.\n'))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([
+    [413, 'too large to save'],
+    [404, 'no longer there'],
+    [401, "You've been signed out"],
+  ])('a %i keeps the text and offers Copy, not Reload', async (status, text) => {
+    editServer({ 'PUT /api/note': { status, body: { detail: 'x' } } })
+    const box = await startEditing()
+    await typeIn(box, 'Kept.')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(text)
+    expect(alert).toHaveTextContent('Your text is still here.')
+    expect(within(alert).getByRole('button', { name: 'Copy my text' })).toBeInTheDocument()
+    expect(within(alert).queryByRole('button', { name: /Reload/ })).toBeNull()
+    expect(box.value).toBe(`${SOURCE.body}Kept.`)
+  })
+
+  it('says when the clipboard can’t be used', async () => {
+    editServer({ 'PUT /api/note': { status: 413, body: { detail: 'Request body too large' } } })
+    const box = await startEditing()
+    await typeIn(box, 'x')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const alert = await screen.findByRole('alert')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) }, configurable: true })
+    await userEvent.click(within(alert).getByRole('button', { name: 'Copy my text' }))
+    expect(await screen.findByText(/Couldn't copy/)).toBeInTheDocument()
+  })
+
+  it('leaving with unsaved changes asks first; Keep editing keeps them', async () => {
+    const { calls } = editServer()
+    const box = await startEditing()
+    await typeIn(box, 'Unsaved.')
+    await userEvent.click(screen.getByRole('button', { name: 'Read' }))
+    expect(await screen.findByText('Discard your unsaved changes?')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
+    expect(box.value).toBe(`${SOURCE.body}Unsaved.`)
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByRole('heading', { name: 'Goals' })).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false)
+  })
+
+  it('leaving without changes goes straight back to reading', async () => {
+    editServer()
+    await startEditing()
+    await userEvent.click(screen.getByRole('button', { name: 'Read' }))
+    expect(await screen.findByRole('heading', { name: 'Goals' })).toBeInTheDocument()
+  })
+
+  it('a CRLF note that is opened and not changed has nothing to save', async () => {
+    editServer({}, { ...SOURCE, body: 'Line one.\r\nLine two.\r\n' })
+    const box = await startEditing()
+    // A browser gives the text back with "\n"; that alone isn't a change.
+    // (Changed and back, so React really sees the "\n" text.)
+    fireEvent.change(box, { target: { value: 'something else' } })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    fireEvent.change(box, { target: { value: 'Line one.\nLine two.\n' } })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.queryByText('Unsaved changes')).toBeNull()
+  })
+
+  it('is read-only when the server was started without --allow-writes', async () => {
+    editServer({}, { ...SOURCE, writable: false })
+    const box = await startEditing()
+    expect(screen.getByRole('status')).toHaveTextContent('Read-only: the server was started without --allow-writes')
+    expect(box).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('shows note text in the editor as text, never as HTML', async () => {
+    const hostile = '<img src=x onerror=alert(1)><script>alert(1)</script>'
+    editServer({}, { ...SOURCE, frontmatter: `---\ntitle: "${hostile}"\n---\n`, body: hostile })
+    const box = await startEditing()
+    expect(box.value).toBe(hostile)
+    expect(screen.getByTestId('frontmatter')).toHaveTextContent(hostile)
+    expect(document.querySelector('img')).toBeNull()
+    expect(document.querySelector('script:not([src])')).toBeNull()
   })
 })

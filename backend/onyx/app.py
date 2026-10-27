@@ -7,18 +7,25 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from onyx import config, models, summary
+from onyx import config, editing, models, summary
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
 from onyx.security import ApiGuard, BodySizeLimit, SecurityHeaders, session_from_scope
-from onyx.vault import Vault
+from onyx.vault import NoteNotFound, Vault, VersionConflict
 from onyx.web import mount_frontend
 
 
 class LaunchCode(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: str = Field(min_length=1, max_length=128)
+
+
+class SaveNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1, max_length=512)
+    body: str = Field(max_length=config.MAX_BODY_BYTES)
+    version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version the editor opened")
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -101,6 +108,50 @@ def create_app(settings: Settings) -> FastAPI:
         if detail is None:
             return JSONResponse({"detail": "Note not found"}, status_code=404)
         return detail
+
+    @app.get(
+        "/api/note/source",
+        response_model=models.NoteSource,
+        responses={404: {"model": models.ErrorResponse, "description": "No such note"}},
+    )
+    def note_source(path: str = Query(min_length=1, max_length=512)) -> dict:
+        try:
+            found = editing.source(vault, path)
+        except NoteNotFound:
+            return JSONResponse({"detail": "Note not found"}, status_code=404)
+        return {**found, "writable": settings.allow_writes}
+
+    # Part (c) of #8: the body only; the frontmatter is kept byte for byte.
+    @app.put(
+        "/api/note",
+        response_model=models.NoteSaved,
+        responses={
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such note"},
+            409: {"model": models.SaveConflict, "description": "Changed on disk since opened"},
+            413: {"model": models.ErrorResponse, "description": "Too large"},
+        },
+    )
+    def save_note(body: SaveNote) -> dict:
+        if not settings.allow_writes:
+            return JSONResponse(
+                {"detail": "Writes are turned off. Start the server with --allow-writes."},
+                status_code=403,
+            )
+        try:
+            saved = editing.save_body(vault, body.path, body.body, body.version)
+        except NoteNotFound:
+            return JSONResponse({"detail": "Note not found"}, status_code=404)
+        except VersionConflict:
+            return JSONResponse(
+                {
+                    "detail": "The note changed on disk since you opened it.",
+                    "version": editing.current_version(vault, body.path),
+                },
+                status_code=409,
+            )
+        # No cache update needed: search catches up with changed files itself.
+        return {"path": saved.path, "version": saved.version}
 
     @app.get("/api/health", response_model=models.Health)
     def health() -> dict[str, str]:

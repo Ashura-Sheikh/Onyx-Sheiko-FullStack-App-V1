@@ -47,6 +47,9 @@ class Settings:
     # The date Home treats as today. None = the computer's local date. Set it
     # (--today) to use the made-up dev-vault, whose dates are in 2031.
     today: date | None = None
+    # Notes can only be changed when the server is started with --allow-writes
+    # (python -m onyx.try_writes sets it, on a throwaway copy of dev-vault/).
+    allow_writes: bool = False
 
     @property
     def allowed_origins(self) -> frozenset[str]:
@@ -55,7 +58,10 @@ class Settings:
 
 
 def load_settings(
-    vault: str | Path | None, port: int = DEFAULT_PORT, today: str | None = None
+    vault: str | Path | None,
+    port: int = DEFAULT_PORT,
+    today: str | None = None,
+    allow_writes: bool = False,
 ) -> Settings:
     if vault is None or str(vault).strip() == "":
         raise ConfigError("A vault folder is required (--vault PATH or ONYX_VAULT).")
@@ -72,4 +78,11 @@ def load_settings(
             fixed_today = date.fromisoformat(today)
         except ValueError as error:
             raise ConfigError("--today must be a date like 2031-04-16.") from error
-    return Settings(vault=path.resolve(), port=port, today=fixed_today)
+    if allow_writes and path.resolve().is_relative_to(REPO_ROOT):
+        # The committed dev-vault/ (or anything else in the repo) is never
+        # written to; writes are tried on a copy (python -m onyx.try_writes).
+        raise ConfigError(
+            "--allow-writes can't be used on a folder inside the repository. "
+            "Use python -m onyx.try_writes, which makes a copy of dev-vault/."
+        )
+    return Settings(vault=path.resolve(), port=port, today=fixed_today, allow_writes=allow_writes)

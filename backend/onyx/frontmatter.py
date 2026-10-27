@@ -20,7 +20,7 @@ _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 
 def split(text: str) -> tuple[dict, str]:
     """Return (frontmatter, body). Body is the text after the frontmatter."""
-    text = text.removeprefix("﻿")
+    text = text.removeprefix("\ufeff")
     lines = text.split("\n")
     if not lines or lines[0].rstrip("\r") != "---":
         return {}, text
@@ -30,6 +30,30 @@ def split(text: str) -> tuple[dict, str]:
             body = "\n".join(lines[index + 1 :])
             return _parse(raw), body
     return {}, text  # no closing line: not frontmatter
+
+
+def split_raw(text: str) -> tuple[str, str]:
+    """Return (head, body) as text, with head + body == text exactly.
+
+    The head is the byte-order mark if there is one, plus the frontmatter
+    block from its first "---" line through the closing "---" line and that
+    line's own line ending, exactly as written. It is never parsed or
+    rebuilt, so a save that only replaces the body can't change a field, even
+    a malformed, oversized or unknown one. Same detection as split(): with no
+    closing line there's no frontmatter, and the head is just the BOM."""
+    bom = "\ufeff" if text.startswith("\ufeff") else ""
+    rest = text[len(bom) :]
+    lines = rest.split("\n")
+    if lines[0].rstrip("\r") != "---":
+        return bom, rest
+    offset = len(lines[0]) + 1
+    for index in range(1, len(lines)):
+        line = lines[index]
+        if line.rstrip("\r") == "---":
+            end = min(offset + len(line) + 1, len(rest))  # + its "\n", if any
+            return bom + rest[:end], rest[end:]
+        offset += len(line) + 1
+    return bom, rest
 
 
 def _parse(raw: str) -> dict:

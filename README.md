@@ -76,6 +76,26 @@ The server prints the address (`http://127.0.0.1:8731`) and a **one-time launch 
 - A search cache is rebuilt from the notes on every start, in your cache folder (`~/Library/Caches/onyx-sheiko` on macOS, `~/.cache/onyx-sheiko` elsewhere, or `ONYX_CACHE_DIR`). It's private to your user, never inside the vault or the repo, and always safe to delete.
 - The page is served with a strict Content Security Policy and a fresh nonce on every load (see `docs/threat-model.md`, T6).
 
+### Editing notes
+
+Notes can be edited only when the server is started with `--allow-writes`. Without it, the editor opens read-only and every save is refused. `--allow-writes` is refused for any folder inside this repository, so the committed `dev-vault/` is never changed. To try editing, run the server on a fresh copy of `dev-vault/` instead:
+
+```bash
+cd backend
+uv run python -m onyx.try_writes --today 2031-04-16
+```
+
+It copies `dev-vault/` into a new temporary folder, prints where, and starts the server on the copy with `--allow-writes`. Each run starts from a fresh copy.
+
+In a note, **Edit** opens its body as plain Markdown. **Save** (or ⌘S / Ctrl+S) writes it:
+
+- Only the body is edited. The frontmatter (the fields between the `---` lines, including tags) is shown above the box, and kept byte for byte. Edit fields in Obsidian for now.
+- The body includes sections the reading view leaves out, such as `## Status History`.
+- If the file changed on disk since you opened it (in Obsidian, say), nothing is saved. Your text stays on screen, with **Reload (discard my edit)** and **Copy my text**.
+- Opening and saving without an edit leaves the file byte-for-byte the same, including Windows line endings and a byte-order mark.
+
+Rename and delete come in a later part of [#8](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/8).
+
 **Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
 
 **Trying the API directly:** every `/api` request needs the header `X-Onyx-Request: 1`:
