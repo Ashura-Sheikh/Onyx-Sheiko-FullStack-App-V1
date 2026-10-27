@@ -32,6 +32,30 @@ def split(text: str) -> tuple[dict, str]:
     return {}, text  # no closing line: not frontmatter
 
 
+def split_raw(text: str) -> tuple[str, str]:
+    """Return (head, body) as text, with head + body == text exactly.
+
+    The head is the byte-order mark if there is one, plus the frontmatter
+    block from its first "---" line through the closing "---" line and that
+    line's own line ending, exactly as written. It is never parsed or
+    rebuilt, so a save that only replaces the body can't change a field, even
+    a malformed, oversized or unknown one. Same detection as split(): with no
+    closing line there's no frontmatter, and the head is just the BOM."""
+    bom = "﻿" if text.startswith("﻿") else ""
+    rest = text[len(bom) :]
+    lines = rest.split("\n")
+    if lines[0].rstrip("\r") != "---":
+        return bom, rest
+    offset = len(lines[0]) + 1
+    for index in range(1, len(lines)):
+        line = lines[index]
+        if line.rstrip("\r") == "---":
+            end = min(offset + len(line) + 1, len(rest))  # + its "\n", if any
+            return bom + rest[:end], rest[end:]
+        offset += len(line) + 1
+    return bom, rest
+
+
 def _parse(raw: str) -> dict:
     if len(raw.encode("utf-8")) > MAX_FRONTMATTER_BYTES:
         return {}

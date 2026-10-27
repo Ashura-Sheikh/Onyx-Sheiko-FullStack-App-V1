@@ -338,6 +338,63 @@
         "title": "NoteRef",
         "type": "object"
       },
+      "NoteSaved": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "NoteSaved",
+        "type": "object"
+      },
+      "NoteSource": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "Everything after the frontmatter, as written",
+            "title": "Body",
+            "type": "string"
+          },
+          "frontmatter": {
+            "description": "The frontmatter block as written; shown, not edited",
+            "title": "Frontmatter",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "SHA-256 of the file; quote it when saving",
+            "title": "Version",
+            "type": "string"
+          },
+          "writable": {
+            "description": "False unless the server was started with --allow-writes",
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "frontmatter",
+          "body",
+          "version",
+          "writable"
+        ],
+        "title": "NoteSource",
+        "type": "object"
+      },
       "NoteSummary": {
         "additionalProperties": false,
         "properties": {
@@ -404,6 +461,62 @@
           "updated"
         ],
         "title": "RecentNote",
+        "type": "object"
+      },
+      "SaveConflict": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file's version now (null: it's gone)",
+            "title": "Version"
+          }
+        },
+        "required": [
+          "detail",
+          "version"
+        ],
+        "title": "SaveConflict",
+        "type": "object"
+      },
+      "SaveNote": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 1048576,
+            "title": "Body",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version the editor opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "body",
+          "version"
+        ],
+        "title": "SaveNote",
         "type": "object"
       },
       "SearchResult": {
@@ -946,6 +1059,133 @@
           }
         },
         "summary": "Note"
+      },
+      "put": {
+        "operationId": "save_note_api_note_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteSaved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such note"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveConflict"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Note"
+      }
+    },
+    "/api/note/source": {
+      "get": {
+        "operationId": "note_source_api_note_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such note"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Note Source"
       }
     },
     "/api/notes": {

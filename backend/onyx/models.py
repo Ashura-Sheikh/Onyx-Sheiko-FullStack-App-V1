@@ -158,3 +158,21 @@ class SearchResult(Model):
 
 class SearchResults(Model):
     results: list[SearchResult]
+
+
+class NoteSource(Model):
+    path: str
+    frontmatter: str = Field(description="The frontmatter block as written; shown, not edited")
+    body: str = Field(description="Everything after the frontmatter, as written")
+    version: str = Field(description="SHA-256 of the file; quote it when saving")
+    writable: bool = Field(description="False unless the server was started with --allow-writes")
+
+
+class NoteSaved(Model):
+    path: str
+    version: str
+
+
+class SaveConflict(Model):
+    detail: str
+    version: str | None = Field(description="The file's version now (null: it's gone)")

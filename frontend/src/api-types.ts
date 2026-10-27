@@ -14,8 +14,12 @@ export interface ApiSchemas {
   NoteDetail: NoteDetail
   NoteList: NoteList
   NoteRef: NoteRef
+  NoteSaved: NoteSaved
+  NoteSource: NoteSource
   NoteSummary: NoteSummary
   RecentNote: RecentNote
+  SaveConflict: SaveConflict
+  SaveNote: SaveNote
   SearchResult: SearchResult
   SearchResults: SearchResults
   SessionStatus: SessionStatus
@@ -167,6 +171,44 @@ export interface NoteSummary {
    */
   updated: string
 }
+export interface NoteSaved {
+  path: string
+  version: string
+}
+export interface NoteSource {
+  /**
+   * Everything after the frontmatter, as written
+   */
+  body: string
+  /**
+   * The frontmatter block as written; shown, not edited
+   */
+  frontmatter: string
+  path: string
+  /**
+   * SHA-256 of the file; quote it when saving
+   */
+  version: string
+  /**
+   * False unless the server was started with --allow-writes
+   */
+  writable: boolean
+}
+export interface SaveConflict {
+  detail: string
+  /**
+   * The file's version now (null: it's gone)
+   */
+  version: string | null
+}
+export interface SaveNote {
+  body: string
+  path: string
+  /**
+   * The version the editor opened
+   */
+  version: string
+}
 export interface SearchResult {
   folder: string
   kind: 'note' | 'task'
@@ -194,6 +236,7 @@ export interface GetResponses {
   '/api/home': HomeData
   '/api/items': ItemList
   '/api/note': NoteDetail
+  '/api/note/source': NoteSource
   '/api/notes': NoteList
   '/api/search': SearchResults
   '/api/session': SessionStatus
