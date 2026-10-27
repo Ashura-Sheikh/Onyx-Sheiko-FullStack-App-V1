@@ -53,7 +53,7 @@ def source(vault: Vault, requested: str) -> dict:
     head, body = frontmatter.split_raw(note.text)
     return {
         "path": note.path,
-        "frontmatter": head.removeprefix("﻿"),
+        "frontmatter": head.removeprefix("\ufeff"),
         "body": body,
         "version": note.version,
     }

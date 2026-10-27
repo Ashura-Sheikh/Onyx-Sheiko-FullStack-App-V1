@@ -20,7 +20,7 @@ _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 
 def split(text: str) -> tuple[dict, str]:
     """Return (frontmatter, body). Body is the text after the frontmatter."""
-    text = text.removeprefix("﻿")
+    text = text.removeprefix("\ufeff")
     lines = text.split("\n")
     if not lines or lines[0].rstrip("\r") != "---":
         return {}, text
@@ -41,7 +41,7 @@ def split_raw(text: str) -> tuple[str, str]:
     rebuilt, so a save that only replaces the body can't change a field, even
     a malformed, oversized or unknown one. Same detection as split(): with no
     closing line there's no frontmatter, and the head is just the BOM."""
-    bom = "﻿" if text.startswith("﻿") else ""
+    bom = "\ufeff" if text.startswith("\ufeff") else ""
     rest = text[len(bom) :]
     lines = rest.split("\n")
     if lines[0].rstrip("\r") != "---":

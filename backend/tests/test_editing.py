@@ -33,8 +33,8 @@ def sha(data: bytes) -> str:
         "no frontmatter\n",
         "---\nstatus: open\n---\n\n# Body\n",
         "---\r\nstatus: open\r\n---\r\n\r\n# Body\r\n",
-        "﻿---\nstatus: open\n---\nbody",
-        "﻿no frontmatter",
+        "\ufeff---\nstatus: open\n---\nbody",
+        "\ufeffno frontmatter",
         "---\nstatus: open\n---",  # closing line is the last line, no newline
         "---\nstatus: open\n---\n",
         "---\nkey: [unclosed\n---\nbody\n",  # malformed YAML
@@ -55,7 +55,7 @@ def test_split_raw_round_trips(text):
     [
         "---\nstatus: open\n---\n\n# Body\n",
         "---\r\nstatus: open\r\n---\r\n\r\n# Body\r\n",
-        "﻿---\nstatus: open\n---\nbody",
+        "\ufeff---\nstatus: open\n---\nbody",
         "no frontmatter\n",
         "---\nno closing line\nbody\n",
     ],
@@ -67,7 +67,7 @@ def test_split_raw_body_is_the_same_body_split_reads(text):
 def test_split_raw_head_is_the_whole_block_with_its_line_ending():
     assert frontmatter.split_raw("---\na: 1\n---\nrest") == ("---\na: 1\n---\n", "rest")
     assert frontmatter.split_raw("---\r\na: 1\r\n---\r\nrest") == ("---\r\na: 1\r\n---\r\n", "rest")
-    assert frontmatter.split_raw("﻿body") == ("﻿", "body")
+    assert frontmatter.split_raw("\ufeffbody") == ("\ufeff", "body")
 
 
 def test_line_endings():
