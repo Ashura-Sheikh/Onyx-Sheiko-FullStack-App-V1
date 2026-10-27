@@ -425,7 +425,7 @@ describe('focus view', () => {
     expect(document.querySelector('img')).toBeNull()
     expect(screen.getByText('[pic]')).toBeInTheDocument()
     // Raw HTML in a note is dropped, not shown as text.
-    expect(screen.queryByText(/onerror|<script>/)).toBeNull()
+    expect(screen.queryByText(/onerror|<script/i)).toBeNull()
   })
 })
 
