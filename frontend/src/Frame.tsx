@@ -8,9 +8,9 @@ import type { NoteDetail } from './api'
 import { FEATURES, PANELS } from './features'
 import { loadLayout, saveLayout, type LayoutPrefs } from './layout'
 import PanelArea from './PanelArea'
+import { IS_MAC } from './shortcuts'
 import type { Theme } from './theme'
 
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const PANEL_IDS = PANELS.map((p) => p.id)
 const DEFAULT_PANELS = PANELS.filter((p) => p.defaultVisible).map((p) => p.id)
 

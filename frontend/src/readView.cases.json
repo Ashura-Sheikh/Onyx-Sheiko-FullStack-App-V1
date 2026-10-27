@@ -1,0 +1,63 @@
+{
+  "hidden_sections": [
+    "Status History",
+    "Context"
+  ],
+  "cases": [
+    {
+      "body": "\n# Inbox\n\nQuick capture.\n",
+      "title": "Inbox",
+      "shown": "Quick capture."
+    },
+    {
+      "body": "# Other title\n\ntext\n",
+      "title": "Inbox",
+      "shown": "# Other title\n\ntext"
+    },
+    {
+      "body": "\n# Task\n\nDo it.\n\n## Status History\n\n- 2031 — open → done\n\n## Notes\n\nkept\n",
+      "title": "Task",
+      "shown": "Do it.\n\n## Notes\n\nkept"
+    },
+    {
+      "body": "## Context\n\nhidden\n### Sub under context\n\nalso hidden\n## Next\n\nshown\n",
+      "title": "T",
+      "shown": "## Next\n\nshown"
+    },
+    {
+      "body": "# T\n\n## Status History\nx\n# New top\nshown\n",
+      "title": "T",
+      "shown": "# New top\nshown"
+    },
+    {
+      "body": "text\n## Status History ##\nhidden\n",
+      "title": "T",
+      "shown": "text"
+    },
+    {
+      "body": "\r\n# T\r\n\r\nCRLF body\r\n",
+      "title": "T",
+      "shown": "\r\nCRLF body\r"
+    },
+    {
+      "body": "#NoSpace is not a heading\n## Context\ngone\n",
+      "title": "T",
+      "shown": "#NoSpace is not a heading"
+    },
+    {
+      "body": "",
+      "title": "T",
+      "shown": ""
+    },
+    {
+      "body": "```\n## Context\n```\nafter\n",
+      "title": "T",
+      "shown": "```"
+    },
+    {
+      "body": "   \n# T   \nbody",
+      "title": "T",
+      "shown": "body"
+    }
+  ]
+}
