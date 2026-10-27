@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { focusPath, getHome, type TaskSummary } from './api'
 import { dateTime, greeting, longDate, PRIORITY_DOT, PRIORITY_LABELS, shortDate, STAGE_LABELS, STAGES } from './labels'
+import HistoryList from './HistoryList'
 import { StagePill } from './StagePill'
 
 const CARD = 'rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-800'
@@ -42,7 +43,7 @@ function TaskCard({ id, title, tasks, empty, showDue }: { id: string; title: str
   )
 }
 
-/** Mockup C's Home, using the full width. History is in the History panel beside it. */
+/** Mockup C's Home, using the full width. History is shown here and in the History panel. */
 export default function Home({ now = () => new Date() }: { now?: () => Date }) {
   const home = useQuery({ queryKey: ['home'], queryFn: getHome })
 
@@ -97,6 +98,13 @@ export default function Home({ now = () => new Date() }: { now?: () => Date }) {
               ))}
             </ul>
           )}
+        </section>
+        <section aria-labelledby="history-heading" className={`${CARD} lg:col-span-2 2xl:col-span-3`}>
+          <h2 id="history-heading" className="mb-1 font-semibold">
+            History
+          </h2>
+          <p className="mb-2 text-sm text-stone-500">Latest stage changes across your tasks, newest first.</p>
+          <HistoryList entries={data.history} empty="No stage changes recorded yet." />
         </section>
       </div>
     </>
