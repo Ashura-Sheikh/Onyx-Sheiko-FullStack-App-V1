@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiFetch, CSRF_HEADER, getSession, signIn, signOut } from './api'
+import { ApiError, apiFetch, apiGet, CSRF_HEADER, getNote, getSession, signIn, signOut } from './api'
 
 function mockFetch(response: Response) {
   const fn = vi.fn().mockResolvedValue(response)
@@ -54,5 +54,25 @@ describe('session helpers', () => {
     const fetchMock = mockFetch(new Response(null, { status: 204 }))
     await signOut()
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE')
+  })
+})
+
+describe('typed GET client', () => {
+  it('encodes the query, with spaces as %20 and slashes escaped', async () => {
+    const fetchMock = mockFetch(new Response(JSON.stringify({ path: 'x' })))
+    await getNote('Projects/Atlas kickoff & more.md')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/note?path=Projects%2FAtlas%20kickoff%20%26%20more.md')
+  })
+
+  it('sends the security header like every other call', async () => {
+    const fetchMock = mockFetch(new Response(JSON.stringify({ status: 'ok' })))
+    await apiGet('/api/health')
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get(CSRF_HEADER)).toBe('1')
+  })
+
+  it('only accepts endpoints the backend has (checked when type-checking)', () => {
+    // @ts-expect-error: not an endpoint in the schema
+    const wrong = () => apiGet('/api/nope')
+    expect(typeof wrong).toBe('function')
   })
 })
