@@ -86,6 +86,22 @@ def test_a_subtask_linking_to_a_note_has_no_parent(tmp_path):
     assert cards["Child.md"]["projects"] == ["Note", "Not written yet"]
 
 
+def test_links_in_the_body_are_neither_projects_nor_parents(tmp_path):
+    cards = board(
+        tmp_path,
+        {
+            "Parent.md": task(),
+            "Note.md": "a note\n",
+            "Child.md": task(tags=("task", "subtask")).replace(
+                "body\n", "See [[Parent]] and [[Note]].\n"
+            ),
+        },
+    )
+    assert cards["Child.md"]["parent"] is None
+    assert cards["Child.md"]["projects"] == []
+    assert cards["Parent.md"]["subtasks"] is None
+
+
 def test_a_subtask_with_two_task_links_takes_the_first_as_parent(tmp_path):
     cards = board(
         tmp_path,
@@ -127,16 +143,17 @@ def test_order_is_stage_then_due_date_then_title_with_unknown_stages_last(tmp_pa
         board(
             tmp_path,
             {
-                "z.md": task("open"),
-                "b.md": task("open", due="2031-04-20"),
-                "a.md": task("open", due="2031-04-18"),
+                # Due date beats the title: "b" is due first, "a" later, "c" never.
+                "c.md": task("open"),
+                "a.md": task("open", due="2031-04-20"),
+                "b.md": task("open", due="2031-04-18"),
                 "done.md": task("done"),
                 "odd.md": task("someday"),
                 "rev.md": task("in-review"),
             },
         )
     )
-    assert cards == ["a.md", "b.md", "z.md", "rev.md", "done.md", "odd.md"]
+    assert cards == ["b.md", "a.md", "c.md", "rev.md", "done.md", "odd.md"]
 
 
 def test_unknown_stage_and_priority_are_null(tmp_path):
