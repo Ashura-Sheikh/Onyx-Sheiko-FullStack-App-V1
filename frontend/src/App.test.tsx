@@ -1324,6 +1324,17 @@ describe('tasks board and list', () => {
     expect(window.location.search).toBe('?view=list')
   })
 
+  it('filters apply on the board too', async () => {
+    window.history.replaceState(null, '', '/tasks?priority=high')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks() })
+    render(<App />)
+    expect(titles(await screen.findByRole('region', { name: 'Open' }))).toEqual(['Pick a layout'])
+    expect(titles(screen.getByRole('region', { name: 'In progress' }))).toEqual(['Launch beta'])
+    expect(titles(screen.getByRole('region', { name: 'Done' }))).toEqual([])
+    expect(within(screen.getByRole('region', { name: 'Done' })).getByText('Nothing here.')).toBeInTheDocument()
+    expect(screen.getByText('2 of 5')).toBeInTheDocument()
+  })
+
   it('shows a "No stage" column only when a task has no known stage', async () => {
     window.history.replaceState(null, '', '/tasks')
     fakeServer({ ...signedIn, ...withHome, ...withTasks([...TASKS, card({ path: 'Tasks/odd.md', title: 'Someday task', status: null })]) })
