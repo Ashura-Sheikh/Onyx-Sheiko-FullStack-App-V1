@@ -993,3 +993,172 @@ describe('editing a note', () => {
     expect(document.querySelector('script:not([src])')).toBeNull()
   })
 })
+
+describe('create, rename and delete notes', () => {
+  const V1 = 'a'.repeat(64)
+  const SOURCE: NoteSource = { path: NOTE.path, frontmatter: '', body: 'Atlas is a sample project.\n', version: V1, writable: true }
+  const sourceOf = (source: NoteSource): Record<string, Reply> => ({
+    [`GET /api/note/source?path=${encodeURIComponent(source.path)}`]: { status: 200, body: source },
+  })
+  const NEW: NoteDetail = { ...NOTE, path: 'Projects/Atlas budget.md', title: 'Atlas budget', body: '', tags: [], links: {}, backlinks: [], related_tasks: [] }
+  const NEW_SOURCE: NoteSource = { path: NEW.path, frontmatter: '', body: '', version: 'e'.repeat(64), writable: true }
+
+  function server(extra: Record<string, Reply> = {}, source: NoteSource = SOURCE) {
+    return fakeServer({ ...signedIn, ...withHome, ...withItems, ...withNotes, ...withNote(NOTE), ...sourceOf(source), ...extra })
+  }
+  const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 'POST' && c.path === path).map((c) => JSON.parse(c.body!))
+
+  it('New note makes an empty note in the folder being shown and opens it for editing', async () => {
+    window.history.replaceState(null, '', '/notes?folder=Projects')
+    const calls = server({ 'POST /api/notes': { status: 201, body: { path: NEW.path, version: NEW_SOURCE.version } }, ...withNote(NEW), ...sourceOf(NEW_SOURCE) })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New note' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'New note' }))
+    expect(dialog.getByText('Projects')).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled()
+    await userEvent.type(dialog.getByLabelText('Name'), 'Atlas budget')
+    await userEvent.click(dialog.getByRole('button', { name: 'Create' }))
+    expect(await screen.findByRole('textbox', { name: 'Note text' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-pressed', 'true')
+    expect(posts(calls, '/api/notes')).toEqual([{ folder: 'Projects', name: 'Atlas budget' }])
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it.each([
+    ['/notes', 'the top level'],
+    ['/notes?tag=atlas', 'the top level'],
+    ['/notes?q=atlas', 'the top level'],
+  ])('New note from %s goes to %s', async (address, where) => {
+    window.history.replaceState(null, '', address)
+    const calls = server({ 'POST /api/notes': { status: 403, body: { detail: 'Writes are turned off. Start the server with --allow-writes.' } }, 'GET /api/search?q=atlas': { status: 200, body: { results: [] } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New note' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'New note' }))
+    expect(dialog.getByText(where)).toBeInTheDocument()
+    await userEvent.type(dialog.getByLabelText('Name'), 'Loose idea{Enter}')
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Start the server with --allow-writes')
+    expect(posts(calls, '/api/notes')).toEqual([{ folder: '', name: 'Loose idea' }])
+  })
+
+  it('New note says when the name is taken, and stays open', async () => {
+    window.history.replaceState(null, '', '/notes?folder=Projects')
+    server({ 'POST /api/notes': { status: 409, body: { detail: 'A note with that name is already there.', reason: 'exists' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New note' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'New note' }))
+    await userEvent.type(dialog.getByLabelText('Name'), 'Atlas kickoff{Enter}')
+    expect(await dialog.findByRole('alert')).toHaveTextContent('A note with that name is already there. Choose another name.')
+    expect(dialog.getByLabelText('Name')).toHaveValue('Atlas kickoff')
+  })
+
+  it('Rename shows how many notes link here, then renames with the version it read', async () => {
+    openFocus(NOTE)
+    const RENAMED = { ...NOTE, path: 'Projects/Atlas kick-off.md', title: 'Atlas kick-off' }
+    const calls = server({ 'POST /api/note/rename': { status: 200, body: { path: RENAMED.path } }, ...withNote(RENAMED) })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Rename note' }))
+    expect(await dialog.findByTestId('link-warning')).toHaveTextContent("2 notes and tasks link to it. Their links won't be updated")
+    const box = dialog.getByLabelText('New name')
+    expect(box).toHaveValue('Atlas kickoff')
+    expect(dialog.getByRole('button', { name: 'Rename' })).toBeDisabled() // unchanged
+    await userEvent.clear(box)
+    await userEvent.type(box, 'Atlas kick-off')
+    await userEvent.click(dialog.getByRole('button', { name: 'Rename' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Atlas kick-off' })).toBeInTheDocument()
+    expect(posts(calls, '/api/note/rename')).toEqual([{ path: NOTE.path, name: 'Atlas kick-off', version: V1 }])
+    expect(window.location.search).toBe(`?path=${encodeURIComponent(RENAMED.path)}`)
+  })
+
+  it('Rename refused because the note changed says so and renames nothing', async () => {
+    openFocus(NOTE)
+    server({ 'POST /api/note/rename': { status: 409, body: { detail: 'x', reason: 'changed' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Rename note' }))
+    await dialog.findByTestId('link-warning')
+    await userEvent.type(dialog.getByLabelText('New name'), ' 2{Enter}')
+    expect(await dialog.findByRole('alert')).toHaveTextContent('This note changed on disk since it was opened, so nothing was changed.')
+    expect(window.location.search).toBe(`?path=${encodeURIComponent(NOTE.path)}`)
+  })
+
+  it('Delete moves the note to the trash, then shows its folder with a notice', async () => {
+    openFocus(NOTE)
+    const calls = server({ 'POST /api/note/delete': { status: 200, body: { trashed_to: '.trash/Projects/Atlas kickoff.md' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete note' }))
+    expect(dialog.getByText(/You can get it back from there/)).toBeInTheDocument()
+    expect(await dialog.findByTestId('link-warning')).toHaveTextContent('2 notes and tasks link to it. Their links will stop working.')
+    await userEvent.click(dialog.getByRole('button', { name: 'Move to trash' }))
+    expect(await screen.findByRole('heading', { name: 'Projects' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Moved “Atlas kickoff” to .trash/Projects/Atlas kickoff.md.')
+    expect(posts(calls, '/api/note/delete')).toEqual([{ path: NOTE.path, version: V1 }])
+  })
+
+  it('Delete refused because the note changed says so and stays on the note', async () => {
+    openFocus(NOTE)
+    server({ 'POST /api/note/delete': { status: 409, body: { detail: 'x', reason: 'changed' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete note' }))
+    await dialog.findByTestId('link-warning')
+    await userEvent.click(dialog.getByRole('button', { name: 'Move to trash' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('changed on disk')
+    expect(window.location.pathname).toBe('/focus')
+  })
+
+  it('says when nothing links to the note', async () => {
+    const LONE = { ...NOTE, backlinks: [], related_tasks: [] }
+    openFocus(LONE)
+    server({ ...withNote(LONE) })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete note' }))
+    expect(await dialog.findByText('No other notes or tasks link to it.')).toBeInTheDocument()
+  })
+
+  it('with writes off, Rename and Delete explain why and do nothing', async () => {
+    openFocus(NOTE)
+    const calls = server({}, { ...SOURCE, writable: false })
+    render(<App />)
+    for (const [button, title, confirm] of [['Rename', 'Rename note', 'Rename'], ['Delete', 'Delete note', 'Move to trash']]) {
+      await userEvent.click(await screen.findByRole('button', { name: button }))
+      const dialog = within(await screen.findByRole('dialog', { name: title }))
+      expect(await dialog.findByRole('status')).toHaveTextContent('--allow-writes')
+      expect(dialog.getByRole('button', { name: confirm })).toBeDisabled()
+      await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }))
+    }
+    expect(calls.filter((c) => c.method === 'POST')).toEqual([])
+  })
+
+  it('a task has no Rename or Delete here, and nor does a note being edited', async () => {
+    openFocus(TASK)
+    server({ ...withNote(TASK) })
+    const { unmount } = render(<App />)
+    expect(await screen.findByRole('heading', { name: TASK.title })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+    unmount()
+
+    openFocus(NOTE)
+    server()
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await screen.findByRole('textbox', { name: 'Note text' })
+    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+  })
+
+  it('shows a hostile title in the dialogs as text, never as HTML', async () => {
+    const hostile = '<img src=x onerror=alert(1)>'
+    const BAD = { ...NOTE, title: hostile }
+    openFocus(BAD)
+    server({ ...withNote(BAD) })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete note' }))
+    expect(dialog.getByText(hostile)).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
+  })
+})

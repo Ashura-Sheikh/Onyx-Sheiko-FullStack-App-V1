@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useLocation, useSearchParams } from 'react-router'
 import { ApiError, getNote, type NoteDetail } from './api'
 import { useCurrentItem } from './currentItem'
 import { dateTime, shortDate } from './labels'
 import Markdown, { type ResolvedLinks } from './Markdown'
+import { RenameDelete } from './NoteActions'
 import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
 
@@ -62,8 +63,8 @@ function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
   )
 }
 
-function FocusItem({ item }: { item: NoteDetail }) {
-  const [mode, setModeNow] = useState<Mode>('read')
+function FocusItem({ item, startIn }: { item: NoteDetail; startIn: Mode }) {
+  const [mode, setModeNow] = useState<Mode>(startIn)
   const [dirty, setDirty] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const leaving: Leaving = { dirty, setDirty, confirm, setConfirm }
@@ -87,6 +88,8 @@ function FocusItem({ item }: { item: NoteDetail }) {
           {where && `${where} · `}
           {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
         </span>
+        {/* Notes only: tasks are renamed and deleted in Tasks (#9). */}
+        {mode === 'read' && item.kind === 'note' && <RenameDelete item={item} />}
         {/* Read while editing goes through the editor, which asks before dropping unsaved text. */}
         <ModeSwitch mode={mode} onChange={setMode} />
       </div>
@@ -115,6 +118,8 @@ export default function Focus() {
   const [params] = useSearchParams()
   const path = params.get('path') ?? ''
   const { setItem } = useCurrentItem()
+  // A note just made with "New note" opens for editing.
+  const startIn: Mode = (useLocation().state as { edit?: unknown } | null)?.edit === true ? 'edit' : 'read'
   const note = useQuery({ queryKey: ['note', path], queryFn: () => getNote(path), enabled: path !== '' })
 
   useEffect(() => {
@@ -143,6 +148,6 @@ export default function Focus() {
       </p>
     )
   }
-  // A different note starts in Read mode.
-  return <FocusItem key={note.data.path} item={note.data} />
+  // A different note starts in Read mode (or Edit, if it was just made).
+  return <FocusItem key={note.data.path} item={note.data} startIn={startIn} />
 }

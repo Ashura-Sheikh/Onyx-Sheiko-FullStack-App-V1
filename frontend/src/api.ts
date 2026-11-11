@@ -2,15 +2,22 @@
 // cookie handling can't be forgotten (threat model T1, T2).
 
 import type {
+  CreateNote,
+  DeleteNote,
   GetResponses,
   HistoryEntry,
   HomeData,
   Item,
   LaunchCode,
+  MoveRefused,
+  NoteCreated,
   NoteDetail,
+  NoteRenamed,
   NoteSaved,
   NoteSource,
   NoteSummary,
+  NoteTrashed,
+  RenameNote,
   SaveConflict,
   SaveNote,
   SearchResult,
@@ -128,6 +135,34 @@ export async function saveNote(path: string, body: string, version: string): Pro
   const request: SaveNote = { path, body, version }
   const response = await apiFetch('/api/note', { method: 'PUT', body: JSON.stringify(request) })
   return (await response.json()) as NoteSaved
+}
+
+/** Make an empty note in an existing folder ('' is the top level). `.md` is added to the name. */
+export async function createNote(folder: string, name: string): Promise<NoteCreated> {
+  const request: CreateNote = { folder, name }
+  const response = await apiFetch('/api/notes', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteCreated
+}
+
+/** Rename a note in its folder. Refused (409) if it changed since `version`, or the name is taken. */
+export async function renameNote(path: string, name: string, version: string): Promise<NoteRenamed> {
+  const request: RenameNote = { path, name, version }
+  const response = await apiFetch('/api/note/rename', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteRenamed
+}
+
+/** Move a note to the vault's .trash folder. Refused (409) if it changed since `version`. */
+export async function deleteNote(path: string, version: string): Promise<NoteTrashed> {
+  const request: DeleteNote = { path, version }
+  const response = await apiFetch('/api/note/delete', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteTrashed
+}
+
+/** Why a create, rename or delete was refused with a 409. */
+export function moveRefusal(error: unknown): MoveRefused['reason'] | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null
+  const reason = (error.body as { reason?: unknown } | undefined)?.reason
+  return reason === 'changed' || reason === 'exists' ? reason : null
 }
 
 /** The address of the Notes page, optionally showing one folder, one tag or a search. */
