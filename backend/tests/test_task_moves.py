@@ -350,3 +350,19 @@ def test_identity_must_be_a_plain_name(vault, name):
 
 def test_identity_is_trimmed(vault):
     assert load_settings(vault, PORT, identity="  Sheikh M  ").identity == "Sheikh M"
+
+
+def test_with_today_set_moves_are_stamped_on_that_date(vault, monkeypatch):
+    # The made-up dev-vault is dated 2031. Moves stamped with the real date
+    # would sort before its history, and closing would be refused. Found by a
+    # real-server run, not by the tests above (they fix the clock to 2031).
+    monkeypatch.setattr(app_module, "now", lambda: datetime(2026, 11, 11, 19, 12, 29, tzinfo=UTC))
+    app = create_app(load_settings(vault, PORT, "2031-04-20", allow_writes=True, identity="sheikh"))
+    client = TestClient(app, base_url=BASE)
+    headers = with_session(sign_in(client, app))
+    for to in ["in-progress", "in-review", "done"]:
+        assert move(client, headers, OPEN, to, version(vault, OPEN)).status_code == 200
+    stamp = lifecycle.local_iso(datetime(2031, 4, 20, 19, 12, 29, tzinfo=UTC))
+    assert f"- {stamp} — in-review → done (signed off by sheikh at {stamp})" in (
+        (vault / OPEN).read_text()
+    )

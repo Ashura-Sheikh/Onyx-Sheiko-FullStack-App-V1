@@ -48,8 +48,9 @@ class Settings:
     cache_dir: Path | None = None
     # The built frontend (npm run build); tests point this at a temporary folder.
     frontend_dist: Path | None = None  # None = DEFAULT_FRONTEND_DIST
-    # The date Home treats as today. None = the computer's local date. Set it
-    # (--today) to use the made-up dev-vault, whose dates are in 2031.
+    # The date Home treats as today, and task moves are stamped with (at the
+    # current time of day). None = the computer's local date. Set it (--today)
+    # to use the made-up dev-vault, whose dates are in 2031.
     today: date | None = None
     # Notes can only be changed when the server is started with --allow-writes
     # (python -m onyx.try_writes sets it, on a throwaway copy of dev-vault/).

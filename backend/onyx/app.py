@@ -120,6 +120,13 @@ def create_app(settings: Settings) -> FastAPI:
     def today() -> date:
         return settings.today or date.today()
 
+    def clock() -> datetime:
+        """The time task moves are stamped with: now, or with --today, that
+        date at the current time of day. Otherwise moves on the made-up
+        dev-vault (dated 2031) would sort before its own history lines."""
+        current = now()
+        return datetime.combine(settings.today, current.timetz()) if settings.today else current
+
     # Read-only summaries. Each request reads the files again, so Home is never
     # stale; the cache will take this over when the vault gets large.
     @app.get("/api/home", response_model=models.HomeData)
@@ -316,7 +323,7 @@ def create_app(settings: Settings) -> FastAPI:
         if not settings.allow_writes:
             return writes_off()
         try:
-            moved = tasks.move(vault, body.path, body.to, body.version, settings.identity, now())
+            moved = tasks.move(vault, body.path, body.to, body.version, settings.identity, clock())
         except tasks.MoveRefused as error:
             detail = tasks.MOVE_REFUSALS.get(error.code, "That move isn't allowed.")
             return JSONResponse({"detail": detail}, status_code=400)
