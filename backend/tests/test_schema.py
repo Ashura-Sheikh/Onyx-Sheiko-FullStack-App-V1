@@ -44,3 +44,9 @@ def test_schema_lists_the_api_and_nothing_else():
 
 def test_schema_file_is_plain_json():
     assert json.loads(SCHEMA_FILE.read_text(encoding="utf-8"))["openapi"].startswith("3.")
+
+
+def test_no_two_models_share_a_name():
+    # FastAPI renames clashing models to "onyx__models__X__1", which leaks into
+    # the generated frontend types.
+    assert not [name for name in openapi_schema()["components"]["schemas"] if "__" in name]

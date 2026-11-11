@@ -21,6 +21,7 @@ import type {
   SaveConflict,
   SaveNote,
   SearchResult,
+  TaskCard,
   TaskSummary,
 } from './api-types'
 
@@ -96,7 +97,7 @@ export async function signOut(): Promise<void> {
 
 export type Stage = NonNullable<TaskSummary['status']>
 export type Priority = NonNullable<TaskSummary['priority']>
-export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSaved, NoteSource, NoteSummary, SaveConflict, SearchResult, TaskSummary }
+export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSaved, NoteSource, NoteSummary, SaveConflict, SearchResult, TaskCard, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
   return apiGet('/api/home')
@@ -113,6 +114,11 @@ export async function search(text: string): Promise<SearchResult[]> {
 
 /** Search starts at this many characters. */
 export const SEARCH_MIN_CHARS = 2
+
+/** Every task for the Tasks board and list, by stage, then due date, then title. */
+export async function getTasks(): Promise<TaskCard[]> {
+  return (await apiGet('/api/tasks')).tasks
+}
 
 export async function getNotes(): Promise<NoteSummary[]> {
   return (await apiGet('/api/notes')).notes

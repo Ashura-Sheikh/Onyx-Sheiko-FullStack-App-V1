@@ -1,6 +1,7 @@
 import Focus from '../Focus'
 import Home from '../Home'
 import Notes from '../Notes'
+import Tasks from '../Tasks'
 import { BacklinksPanel, RelatedTasksPanel, TagsPanel } from './notePanels'
 import { DetailsPanel, HistoryPanel } from './panels'
 import type { Feature, PanelDefinition } from './types'
@@ -25,6 +26,11 @@ export const FEATURES: Feature[] = [
       { id: 'related-tasks', title: 'Related tasks', defaultVisible: true, render: (c) => <RelatedTasksPanel {...c} /> },
       { id: 'tags', title: 'Tags', defaultVisible: false, render: () => <TagsPanel /> },
     ],
+  },
+  {
+    id: 'tasks',
+    route: { path: '/tasks', element: <Tasks /> },
+    nav: { label: 'Tasks', to: '/tasks' },
   },
   {
     id: 'focus',
