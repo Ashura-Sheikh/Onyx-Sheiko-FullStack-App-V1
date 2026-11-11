@@ -97,7 +97,14 @@ In a note, **Edit** opens its body as plain Markdown. **Save** (or ⌘S / Ctrl+S
 - If the file changed on disk since you opened it (in Obsidian, say), nothing is saved. Your text stays on screen, with **Reload (discard my edit)** and **Copy my text**.
 - Opening and saving without an edit leaves the file byte-for-byte the same, including Windows line endings and a byte-order mark.
 
-Rename and delete come in a later part of [#8](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/8).
+### Creating, renaming and deleting notes
+
+These also need `--allow-writes`, and work on notes only: tasks get theirs in [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9).
+
+- **New note** on the Notes page makes an empty note in the folder you're viewing (the top level from All notes, a tag or a search) and opens it for editing. `.md` is added to the name. A name can't contain `/ \ : * ? " < > | # ^ [ ]`, and an existing note is never replaced.
+- **Rename** (next to Read/Edit on a note) changes the name only; the note stays in its folder. It never replaces another note, and changing only capitals works on the Mac's usual disk. The dialog says how many notes and tasks link to the note: **their `[[links]]` aren't updated**, so they stop working.
+- **Delete** moves the note to the vault's `.trash` folder, keeping its folders (`.trash/Projects/Note.md`), like Obsidian's own trash. Get it back from there in Finder or Obsidian. If a note with that name is already in the trash, the new one gets the date and time in its name.
+- Rename and delete are refused if the note changed on disk since the dialog opened it. A note reached through a symlink is never moved.
 
 **Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
 
