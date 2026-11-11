@@ -102,11 +102,11 @@ def note_file_name(typed: str) -> str:
     if name.casefold().endswith(".md"):
         name = name[:-3].rstrip()
     if name == "":
-        raise PathRejected("Type a name for the note.")
+        raise PathRejected("name-empty")
     if any(c in _BAD_NAME_CHARS or ord(c) < 32 or ord(c) == 127 for c in name):
-        raise PathRejected("A note name can't contain / \\ : * ? \" < > | # ^ [ ]")
+        raise PathRejected("name-character")
     if name.startswith("."):
-        raise PathRejected("A note name can't start with a dot.")
+        raise PathRejected("name-dot")
     return name + ".md"
 
 

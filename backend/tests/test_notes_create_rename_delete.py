@@ -14,7 +14,7 @@ from onyx import app as app_module
 from onyx.app import create_app
 from onyx.config import load_settings
 from onyx.editing import note_file_name
-from onyx.vault import PathRejected
+from onyx.vault import REFUSALS, PathRejected
 from tests.test_security_baseline import BASE, DEV_VAULT, PORT, sign_in, with_session
 
 NOTE = "Projects/Atlas kickoff.md"
@@ -384,3 +384,34 @@ def test_writes_leave_no_temporary_files(api, vault):
     rename(client, headers, NOTE, "Renamed", version(vault, NOTE))
     delete(client, headers, "Projects/Renamed.md", version(vault, "Projects/Renamed.md"))
     assert not list(vault.rglob(".onyx-tmp-*"))
+
+
+# --- Refusal messages ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("folder", "name", "code"),
+    [
+        ("Projects", "   ", "name-empty"),
+        ("Projects", "a/b", "name-character"),
+        ("Projects", ".hidden", "name-dot"),
+        ("Nope", "x", "no-folder"),
+        (".obsidian", "x", "path-hidden"),
+    ],
+)
+def test_a_refusal_says_why_in_a_fixed_sentence(api, vault, folder, name, code):
+    # The user sees what to fix; the sentence comes from REFUSALS by code,
+    # never from the exception's text, so no path or input is echoed back.
+    client, headers = api
+    response = create(client, headers, folder, name)
+    assert response.status_code == 400
+    assert response.json() == {"detail": REFUSALS[code]}
+    assert str(vault) not in response.text
+
+
+def test_every_refusal_code_has_a_sentence_and_unknown_codes_fail():
+    assert all(text.endswith((".", "]")) for text in REFUSALS.values())
+    assert str(PathRejected("same-name")) == REFUSALS["same-name"]
+    assert PathRejected("same-name").code == "same-name"
+    with pytest.raises(KeyError):
+        PathRejected("no-such-code")

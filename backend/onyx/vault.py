@@ -42,8 +42,40 @@ MAX_SEGMENT_CHARS = 255
 TEMP_PREFIX = ".onyx-tmp-"
 
 
+# Why a name or path was refused, by code. The API answers with these fixed
+# sentences only, looked up by code, so no exception text, path or typed
+# input ever reaches a response (CodeQL: information exposure through an
+# exception).
+REFUSALS: dict[str, str] = {
+    "path-required": "A note path is required.",
+    "path-too-long": "The note path is too long.",
+    "path-character": "The note path contains a character that isn't allowed.",
+    "path-absolute": "Use a path inside the vault, not an absolute path.",
+    "path-dots": "The note path has an empty, '.' or '..' part.",
+    "path-hidden": "Hidden files and folders can't be used.",
+    "path-part-too-long": "A part of the note path is too long.",
+    "not-markdown": "Only Markdown notes (.md) can be opened.",
+    "outside-vault": "The note path leads outside the vault.",
+    "folder-link": "That folder is a link, or leads outside the vault.",
+    "no-folder": "There's no such folder in the vault.",
+    "note-link": "Notes reached through a link can't be moved or deleted.",
+    "is-folder": "That path is a folder, not a note.",
+    "target-folder-link": "The new folder is a link, or leads outside the vault.",
+    "same-name": "The new name is the same as the old one.",
+    "trash-link": "The trash folder is a link or a file, so nothing was moved.",
+    "name-empty": "Type a name for the note.",
+    "name-character": "A note name can't contain / \\ : * ? \" < > | # ^ [ ]",
+    "name-dot": "A note name can't start with a dot.",
+}
+
+
 class PathRejected(ValueError):
-    """The name isn't allowed. The message is safe to show to the user."""
+    """The name isn't allowed. `code` is a key of REFUSALS; the message is
+    REFUSALS[code], a fixed sentence written for the user."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(REFUSALS[code])
+        self.code = code
 
 
 class NoteNotFound(FileNotFoundError):
@@ -86,32 +118,32 @@ class Vault:
     def _segments(name: str) -> list[str]:
         """The lexical checks shared by notes and folders."""
         if not isinstance(name, str) or name == "":
-            raise PathRejected("A note path is required.")
+            raise PathRejected("path-required")
         if len(name) > MAX_PATH_CHARS:
-            raise PathRejected("The note path is too long.")
+            raise PathRejected("path-too-long")
         if "\x00" in name or "\\" in name:
-            raise PathRejected("The note path contains a character that isn't allowed.")
+            raise PathRejected("path-character")
         if name.startswith("/") or (len(name) > 1 and name[1] == ":"):
-            raise PathRejected("Use a path inside the vault, not an absolute path.")
+            raise PathRejected("path-absolute")
         segments = name.split("/")
         for segment in segments:
             if segment in ("", ".", ".."):
-                raise PathRejected("The note path has an empty, '.' or '..' part.")
+                raise PathRejected("path-dots")
             if segment.startswith("."):
-                raise PathRejected("Hidden files and folders can't be used.")
+                raise PathRejected("path-hidden")
             if len(segment) > MAX_SEGMENT_CHARS:
-                raise PathRejected("A part of the note path is too long.")
+                raise PathRejected("path-part-too-long")
         return segments
 
     def resolve(self, name: str) -> Path:
         """Return the real absolute path for a note name, or raise PathRejected."""
         segments = self._segments(name)
         if not segments[-1].endswith(NOTE_SUFFIX) or segments[-1] == NOTE_SUFFIX:
-            raise PathRejected("Only Markdown notes (.md) can be opened.")
+            raise PathRejected("not-markdown")
 
         real = Path(os.path.realpath(self.root.joinpath(*segments)))
         if not real.is_relative_to(self.root) or real == self.root:
-            raise PathRejected("The note path leads outside the vault.")
+            raise PathRejected("outside-vault")
         return real
 
     def resolve_folder(self, name: str) -> Path:
@@ -122,9 +154,9 @@ class Vault:
         segments = self._segments(name)
         joined = self.root.joinpath(*segments)
         if Path(os.path.realpath(joined)) != joined:
-            raise PathRejected("That folder is a link, or leads outside the vault.")
+            raise PathRejected("folder-link")
         if not joined.is_dir():
-            raise PathRejected("There's no such folder in the vault.")
+            raise PathRejected("no-folder")
         return joined
 
     def _strict(self, name: str) -> Path:
@@ -132,7 +164,7 @@ class Vault:
         that's reached through a link would move the link's target."""
         real = self.resolve(name)
         if real != self.root.joinpath(*name.split("/")):
-            raise PathRejected("Notes reached through a link can't be moved or deleted.")
+            raise PathRejected("note-link")
         return real
 
     def relative(self, real: Path) -> str:
@@ -147,7 +179,7 @@ class Vault:
         except FileNotFoundError as error:
             raise NoteNotFound(name) from error
         except IsADirectoryError as error:
-            raise PathRejected("That path is a folder, not a note.") from error
+            raise PathRejected("is-folder") from error
         return Note(path=self.relative(path), text=data.decode("utf-8"), version=version_of(data))
 
     def modified(self, name: str) -> datetime:
@@ -202,9 +234,9 @@ class Vault:
         source = self._strict(old)
         target = self.resolve(new)
         if target.parent != self.root.joinpath(*new.split("/")).parent:
-            raise PathRejected("The new folder is a link, or leads outside the vault.")
+            raise PathRejected("target-folder-link")
         if source == target:
-            raise PathRejected("The new name is the same as the old one.")
+            raise PathRejected("same-name")
         if not source.is_file():
             raise NoteNotFound(old)
         # Same letters ignoring case, and the disk says it's the same file. (Two
@@ -223,7 +255,7 @@ class Vault:
             _fsync_folder(target.parent)
             return self.relative(target)
         if not target.parent.is_dir():
-            raise PathRejected("There's no such folder in the vault.")
+            raise PathRejected("no-folder")
         self._move_no_replace(source, target, expected_version)
         return self.relative(target)
 
@@ -268,7 +300,7 @@ class Vault:
         except FileExistsError:
             pass
         if not stat.S_ISDIR(os.lstat(folder).st_mode):
-            raise PathRejected("The trash folder is a link or a file, so nothing was moved.")
+            raise PathRejected("trash-link")
         return folder
 
     def _check_version(self, path: Path, expected_version: str) -> None:

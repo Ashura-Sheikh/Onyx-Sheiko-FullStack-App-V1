@@ -13,6 +13,7 @@ from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
 from onyx.security import ApiGuard, BodySizeLimit, SecurityHeaders, session_from_scope
 from onyx.vault import (
+    REFUSALS,
     MoveNotSupported,
     NoteExists,
     NoteNotFound,
@@ -200,7 +201,9 @@ def create_app(settings: Settings) -> FastAPI:
                 {"detail": "This is a task. Rename or delete it in Tasks."}, status_code=400
             )
         if isinstance(error, PathRejected):
-            return JSONResponse({"detail": str(error)}, status_code=400)
+            # A fixed sentence chosen by code, never the exception's own text.
+            detail = REFUSALS.get(error.code, "That name or path isn't allowed.")
+            return JSONResponse({"detail": detail}, status_code=400)
         if isinstance(error, VersionConflict):
             return JSONResponse(
                 {"detail": "The note changed on disk since you opened it.", "reason": "changed"},
