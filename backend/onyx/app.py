@@ -1,13 +1,14 @@
 """The FastAPI app. Build one with create_app(settings) per server run."""
 
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from onyx import config, editing, models, summary
+from onyx import config, editing, models, summary, tasks
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
@@ -46,6 +47,13 @@ class RenameNote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str = Field(min_length=1, max_length=512)
     name: str = Field(min_length=1, max_length=255, description="The new name, same folder")
+    version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+class MoveTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1, max_length=512)
+    to: Literal["open", "in-progress", "in-review", "done"]
     version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
 
 
@@ -112,6 +120,13 @@ def create_app(settings: Settings) -> FastAPI:
     def today() -> date:
         return settings.today or date.today()
 
+    def clock() -> datetime:
+        """The time task moves are stamped with: now, or with --today, that
+        date at the current time of day. Otherwise moves on the made-up
+        dev-vault (dated 2031) would sort before its own history lines."""
+        current = now()
+        return datetime.combine(settings.today, current.timetz()) if settings.today else current
+
     # Read-only summaries. Each request reads the files again, so Home is never
     # stale; the cache will take this over when the vault gets large.
     @app.get("/api/home", response_model=models.HomeData)
@@ -123,7 +138,7 @@ def create_app(settings: Settings) -> FastAPI:
         return {"items": summary.items(summary.read_summary(vault))}
 
     @app.get("/api/tasks", response_model=models.TaskBoard)
-    def tasks() -> dict:
+    def task_list() -> dict:
         return {"tasks": summary.task_board(summary.read_summary(vault))}
 
     @app.get("/api/search", response_model=models.SearchResults)
@@ -288,6 +303,33 @@ def create_app(settings: Settings) -> FastAPI:
             return {"trashed_to": editing.delete_note(vault, body.path, body.version, now())}
         except write_errors as error:
             return refused(error)
+
+    @app.get("/api/app-settings", response_model=models.AppSettings)
+    def app_settings() -> dict:
+        return {"writable": settings.allow_writes, "identity": settings.identity}
+
+    # Part (b) of #9: one stage on; done needs a sign-off (onyx/tasks.py).
+    @app.post(
+        "/api/task/move",
+        response_model=models.TaskMoved,
+        responses={
+            400: {"model": models.ErrorResponse, "description": "Move refused"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such task"},
+            409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},
+        },
+    )
+    def move_task(body: MoveTask) -> dict:
+        if not settings.allow_writes:
+            return writes_off()
+        try:
+            moved = tasks.move(vault, body.path, body.to, body.version, settings.identity, clock())
+        except tasks.MoveRefused as error:
+            detail = tasks.MOVE_REFUSALS.get(error.code, "That move isn't allowed.")
+            return JSONResponse({"detail": detail}, status_code=400)
+        except (NoteNotFound, VersionConflict) as error:
+            return refused(error)
+        return {"path": moved.path, "version": moved.version, "status": body.to}
 
     @app.get("/api/health", response_model=models.Health)
     def health() -> dict[str, str]:
