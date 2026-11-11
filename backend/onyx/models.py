@@ -199,7 +199,7 @@ class MoveRefused(Model):
     )
 
 
-class TaskRef(Model):
+class ParentRef(Model):
     path: str
     title: str
 
@@ -211,7 +211,7 @@ class SubtaskCount(Model):
 
 class TaskCard(TaskSummary):
     projects: list[str] = Field(description="Project links (not the parent), as written")
-    parent: TaskRef | None = Field(description="The parent task, for a task tagged subtask")
+    parent: ParentRef | None = Field(description="The parent task, for a task tagged subtask")
     subtasks: SubtaskCount | None = Field(description="Sub-task progress, for a parent task")
 
 

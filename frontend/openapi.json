@@ -344,7 +344,7 @@
           },
           "related_tasks": {
             "items": {
-              "$ref": "#/components/schemas/onyx__models__TaskRef__2"
+              "$ref": "#/components/schemas/TaskRef"
             },
             "title": "Related Tasks",
             "type": "array"
@@ -551,6 +551,25 @@
           "trashed_to"
         ],
         "title": "NoteTrashed",
+        "type": "object"
+      },
+      "ParentRef": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title"
+        ],
+        "title": "ParentRef",
         "type": "object"
       },
       "RecentNote": {
@@ -845,7 +864,7 @@
           "parent": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/onyx__models__TaskRef__1"
+                "$ref": "#/components/schemas/ParentRef"
               },
               {
                 "type": "null"
@@ -1091,6 +1110,43 @@
         "title": "TaskHistoryEntry",
         "type": "object"
       },
+      "TaskRef": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "in-progress",
+                  "in-review",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "status"
+        ],
+        "title": "TaskRef",
+        "type": "object"
+      },
       "TaskSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1196,62 +1252,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "onyx__models__TaskRef__1": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "title"
-        ],
-        "title": "TaskRef",
-        "type": "object"
-      },
-      "onyx__models__TaskRef__2": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "open",
-                  "in-progress",
-                  "in-review",
-                  "done"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "title",
-          "status"
-        ],
-        "title": "TaskRef",
         "type": "object"
       }
     }

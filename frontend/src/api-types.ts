@@ -23,6 +23,7 @@ export interface ApiSchemas {
   NoteSource: NoteSource
   NoteSummary: NoteSummary
   NoteTrashed: NoteTrashed
+  ParentRef: ParentRef
   RecentNote: RecentNote
   RenameNote: RenameNote
   SaveConflict: SaveConflict
@@ -37,10 +38,9 @@ export interface ApiSchemas {
   TaskCard: TaskCard
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
+  TaskRef: TaskRef
   TaskSummary: TaskSummary
   ValidationError: ValidationError
-  onyx__models__TaskRef__1: TaskRef1
-  onyx__models__TaskRef__2: TaskRef
 }
 export interface CreateNote {
   /**
@@ -245,6 +245,10 @@ export interface NoteTrashed {
    */
   trashed_to: string
 }
+export interface ParentRef {
+  path: string
+  title: string
+}
 export interface RenameNote {
   /**
    * The new name, same folder
@@ -306,7 +310,7 @@ export interface TaskCard {
   /**
    * The parent task, for a task tagged subtask
    */
-  parent: TaskRef1 | null
+  parent: ParentRef | null
   path: string
   priority: ('high' | 'normal' | 'low') | null
   /**
@@ -318,10 +322,6 @@ export interface TaskCard {
    * Sub-task progress, for a parent task
    */
   subtasks: SubtaskCount | null
-  title: string
-}
-export interface TaskRef1 {
-  path: string
   title: string
 }
 
