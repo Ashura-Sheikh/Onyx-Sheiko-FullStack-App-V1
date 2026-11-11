@@ -175,8 +175,8 @@ export default function Notes() {
               </Link>
             )}
             <span className="ml-auto">
-              {/* In the folder being shown; from All notes, a tag or a search, at the top level. */}
-              <NewNote folder={q === undefined && tag === undefined ? (folder ?? '') : ''} />
+              {/* In the folder being shown; from All notes, a tag or a search (no folder), at the top level. */}
+              <NewNote folder={folder ?? ''} />
             </span>
           </div>
           {typeof notice === 'string' && (

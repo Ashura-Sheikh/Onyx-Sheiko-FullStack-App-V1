@@ -1017,8 +1017,10 @@ describe('create, rename and delete notes', () => {
     expect(dialog.getByText('Projects')).toBeInTheDocument()
     expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled()
     await userEvent.type(dialog.getByLabelText('Name'), 'Atlas budget')
+    const listsBefore = calls.filter((c) => c.path === '/api/notes' && c.method === 'GET').length
     await userEvent.click(dialog.getByRole('button', { name: 'Create' }))
     expect(await screen.findByRole('textbox', { name: 'Note text' })).toBeInTheDocument()
+    expect(calls.filter((c) => c.path === '/api/notes' && c.method === 'GET').length).toBeGreaterThan(listsBefore) // the list is read again
     expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-pressed', 'true')
     expect(posts(calls, '/api/notes')).toEqual([{ folder: 'Projects', name: 'Atlas budget' }])
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -1127,6 +1129,7 @@ describe('create, rename and delete notes', () => {
       const dialog = within(await screen.findByRole('dialog', { name: title }))
       expect(await dialog.findByRole('status')).toHaveTextContent('--allow-writes')
       expect(dialog.getByRole('button', { name: confirm })).toBeDisabled()
+      if (button === 'Rename') await userEvent.type(dialog.getByLabelText('New name'), ' 2{Enter}') // Enter doesn't get round it
       await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }))
     }
     expect(calls.filter((c) => c.method === 'POST')).toEqual([])
