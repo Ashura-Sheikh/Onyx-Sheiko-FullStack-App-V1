@@ -1165,3 +1165,88 @@ describe('create, rename and delete notes', () => {
     expect(document.querySelector('img')).toBeNull()
   })
 })
+
+describe('changes while editing', () => {
+  const SOURCE: NoteSource = {
+    path: NOTE.path,
+    frontmatter: '',
+    body: 'one\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix\r\nseven\r\n',
+    version: 'a'.repeat(64),
+    writable: true,
+  }
+  const sourceOf = (source: NoteSource): Record<string, Reply> => ({
+    [`GET /api/note/source?path=${encodeURIComponent(source.path)}`]: { status: 200, body: source },
+  })
+
+  async function edit(source: NoteSource = SOURCE) {
+    const calls = fakeServer({ ...signedIn, ...withHome, ...withItems, ...withNote(NOTE), ...sourceOf(source) })
+    openFocus(NOTE)
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    const box = (await screen.findByRole('textbox', { name: 'Note text' })) as HTMLTextAreaElement
+    return { box, calls }
+  }
+
+  /** Replace the whole text, as a paste would. */
+  const setText = (box: HTMLTextAreaElement, text: string) => fireEvent.change(box, { target: { value: text } })
+
+  it('Changes shows + / − lines against the note as opened, with nothing to show before an edit', async () => {
+    const { box, calls } = await edit()
+    expect(screen.getByRole('region', { name: 'Preview' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
+    const region = within(screen.getByRole('region', { name: 'Changes' }))
+    expect(region.getByText('No changes yet.')).toBeInTheDocument() // CRLF on disk vs "\n" in the box isn't a change
+
+    setText(box, 'one\ntwo\nTHREE\nfour\nfive\nsix\nseven\neight\n')
+    expect(await region.findByTestId('change-counts')).toHaveTextContent('+2 −1 since you opened it')
+    const list = within(region.getByRole('list', { name: 'Changed lines' }))
+    const rows = list.getAllByRole('listitem').map((li) => `${li.dataset.kind ?? 'gap'}:${li.textContent}`)
+    expect(rows).toEqual([
+      'same:1 one',
+      'same:2 two',
+      'removed:3−three',
+      'added:3+THREE',
+      'same:4 four',
+      'same:5 five', // the two edits' context lines meet, so no gap here
+      'same:6 six',
+      'same:7 seven',
+      'added:8+eight',
+      'same:9  ',
+    ])
+    expect(list.getByText('three').tagName).toBe('DEL')
+    expect(list.getByText('THREE').tagName).toBe('INS')
+    expect(calls.filter((c) => c.method !== 'GET')).toEqual([]) // nothing is saved or stored
+
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByRole('region', { name: 'Preview' })).toBeInTheDocument()
+  })
+
+  it('undoing an edit by hand brings back "No changes yet."', async () => {
+    const { box } = await edit()
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
+    setText(box, 'changed\n')
+    expect(await screen.findByTestId('change-counts')).toBeInTheDocument()
+    setText(box, SOURCE.body.replace(/\r\n/g, '\n'))
+    expect(await screen.findByText('No changes yet.')).toBeInTheDocument()
+  })
+
+  it('a rewrite too large to compare says so instead of comparing', async () => {
+    const lines = (word: string) => Array.from({ length: 2100 }, (_, k) => `${word} ${k}`).join('\n')
+    const { box } = await edit({ ...SOURCE, body: lines('old') })
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
+    setText(box, lines('new'))
+    expect(await screen.findByText('Too many changes to compare line by line. Your text is unaffected.')).toBeInTheDocument()
+    expect(box.value).toBe(lines('new'))
+  })
+
+  it('shows changed lines as text, never as HTML', async () => {
+    const { box } = await edit()
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
+    const hostile = '<img src=x onerror=alert(1)><script>alert(1)</script>'
+    setText(box, `${hostile}\n`)
+    const region = within(screen.getByRole('region', { name: 'Changes' }))
+    expect((await region.findByText(hostile)).tagName).toBe('INS')
+    expect(document.querySelector('img')).toBeNull()
+    expect(document.querySelector('script:not([src])')).toBeNull()
+  })
+})
