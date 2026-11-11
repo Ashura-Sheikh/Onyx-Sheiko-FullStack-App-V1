@@ -154,7 +154,9 @@ export function RenameDelete({ item }: { item: NoteDetail }) {
   }
 
   async function run(action: () => Promise<void>) {
-    if (busy || !state?.writable) return
+    // With writes off the confirm buttons are disabled (Enter can't submit
+    // either), and the server refuses with a 403 regardless.
+    if (busy || !state) return
     setBusy(true)
     setProblem(null)
     try {
