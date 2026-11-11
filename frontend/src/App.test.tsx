@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { HomeData, Item, NoteDetail, NoteSource, NoteSummary, SearchResult } from './api'
+import type { HomeData, Item, NoteDetail, NoteSource, NoteSummary, SearchResult, TaskCard } from './api'
 import { LAYOUT_KEY } from './layout'
 import { THEME_KEY } from './theme'
 
@@ -1248,5 +1248,117 @@ describe('changes while editing', () => {
     expect((await region.findByText(hostile)).tagName).toBe('INS')
     expect(document.querySelector('img')).toBeNull()
     expect(document.querySelector('script:not([src])')).toBeNull()
+  })
+})
+
+describe('tasks board and list', () => {
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+  const TASKS: TaskCard[] = [
+    card({ path: 'Tasks/Pick.md', title: 'Pick a layout', status: 'open', priority: 'high', due: '2031-04-16', projects: ['Atlas kickoff'] }),
+    card({ path: 'Tasks/Form.md', title: 'Set up feedback form', status: 'open', priority: 'normal', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }),
+    card({ path: 'Tasks/Beta.md', title: 'Launch beta', status: 'in-progress', priority: 'high', due: '2031-04-30', projects: ['Atlas kickoff'], subtasks: { done: 1, total: 2 } }),
+    card({ path: 'Tasks/Rev.md', title: 'Review cache design', status: 'in-review', priority: 'low', projects: ['Atlas architecture'] }),
+    card({ path: 'Tasks/Invite.md', title: 'Write invite text', status: 'done', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }),
+  ]
+  const withTasks = (tasks: TaskCard[] = TASKS) => ({ 'GET /api/tasks': { status: 200, body: { tasks } } })
+  const titles = (region: HTMLElement) => within(region).queryAllByRole('listitem').map((li) => within(li).getAllByRole('link').at(-1)!.textContent)
+
+  it('is in the navigation and shows the board by stage, by default', async () => {
+    fakeServer({ ...signedIn, ...withHome, ...withTasks() })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('link', { name: 'Tasks' }))
+    expect(await screen.findByRole('heading', { name: 'Tasks', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Board' })).toHaveAttribute('aria-pressed', 'true')
+    expect(titles(screen.getByRole('region', { name: 'Open' }))).toEqual(['Pick a layout', 'Set up feedback form'])
+    expect(titles(screen.getByRole('region', { name: 'In progress' }))).toEqual(['Launch beta'])
+    expect(titles(screen.getByRole('region', { name: 'In review' }))).toEqual(['Review cache design'])
+    expect(titles(screen.getByRole('region', { name: 'Done' }))).toEqual(['Write invite text'])
+    expect(screen.queryByRole('region', { name: 'No stage' })).toBeNull()
+    expect(screen.getByText('5 of 5')).toBeInTheDocument()
+  })
+
+  it('a card shows priority, due date, projects, its parent and sub-task progress, and opens the task', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks(), ...withNote(TASK) })
+    render(<App />)
+    const doing = within(await screen.findByRole('region', { name: 'In progress' }))
+    expect(doing.getByText('High priority')).toBeInTheDocument()
+    expect(doing.getByText('due 30 Apr')).toBeInTheDocument()
+    expect(doing.getByText('Atlas kickoff')).toBeInTheDocument()
+    expect(doing.getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
+    expect(doing.getByText('1/2 sub-tasks', { exact: false })).toBeInTheDocument()
+    const open = within(screen.getByRole('region', { name: 'Open' }))
+    expect(open.getByText(/Sub-task of/)).toBeInTheDocument()
+    expect(open.getByRole('link', { name: 'Launch beta' })).toHaveAttribute('href', '/focus?path=Tasks%2FBeta.md')
+    expect(open.getByRole('link', { name: 'Pick a layout' })).toHaveAttribute('href', '/focus?path=Tasks%2FPick.md')
+  })
+
+  it('List shows a table, and the choice is kept in the address', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks() })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'List' }))
+    const rows = within(await screen.findByRole('table')).getAllByRole('row').slice(1)
+    // Each row's own link is the last one in its first cell (a sub-task's parent link comes first).
+    const own = rows.map((r) => within(within(r).getAllByRole('cell')[0]).getAllByRole('link').at(-1)!.textContent)
+    expect(own).toEqual(['Pick a layout', 'Set up feedback form', 'Launch beta', 'Review cache design', 'Write invite text'])
+    expect(within(rows[1]).getByText(/Sub-task of/)).toBeInTheDocument()
+    expect(within(rows[2]).getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
+    expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Pick a layout', 'Open', 'High priority', '16 Apr', 'Atlas kickoff'])
+    expect(window.location.search).toBe('?view=list')
+  })
+
+  it('filters by stage, priority and project, in the address, and clears them', async () => {
+    window.history.replaceState(null, '', '/tasks?view=list')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks() })
+    render(<App />)
+    await userEvent.selectOptions(await screen.findByLabelText('Project'), 'Atlas kickoff')
+    expect(screen.getByText('2 of 5')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'high')
+    await userEvent.selectOptions(screen.getByLabelText('Stage'), 'in-progress')
+    expect(screen.getByText('1 of 5')).toBeInTheDocument()
+    expect(new URLSearchParams(window.location.search).get('project')).toBe('Atlas kickoff')
+    expect(window.location.search).toBe('?view=list&status=in-progress&priority=high&project=Atlas%20kickoff')
+    await userEvent.click(screen.getByRole('link', { name: 'Clear filters' }))
+    expect(await screen.findByText('5 of 5')).toBeInTheDocument()
+    expect(window.location.search).toBe('?view=list')
+  })
+
+  it('filters apply on the board too', async () => {
+    window.history.replaceState(null, '', '/tasks?priority=high')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks() })
+    render(<App />)
+    expect(titles(await screen.findByRole('region', { name: 'Open' }))).toEqual(['Pick a layout'])
+    expect(titles(screen.getByRole('region', { name: 'In progress' }))).toEqual(['Launch beta'])
+    expect(titles(screen.getByRole('region', { name: 'Done' }))).toEqual([])
+    expect(within(screen.getByRole('region', { name: 'Done' })).getByText('Nothing here.')).toBeInTheDocument()
+    expect(screen.getByText('2 of 5')).toBeInTheDocument()
+  })
+
+  it('shows a "No stage" column only when a task has no known stage', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    fakeServer({ ...signedIn, ...withHome, ...withTasks([...TASKS, card({ path: 'Tasks/odd.md', title: 'Someday task', status: null })]) })
+    render(<App />)
+    expect(titles(await screen.findByRole('region', { name: 'No stage' }))).toEqual(['Someday task'])
+  })
+
+  it('says when tasks can\'t be loaded', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    fakeServer({ ...signedIn, ...withHome, 'GET /api/tasks': { status: 500, body: { detail: 'x' } } })
+    render(<App />)
+    expect(await screen.findByRole('alert')).toHaveTextContent("Tasks couldn't be loaded.")
+  })
+
+  it('shows task titles and projects as text, never as HTML', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const hostile = '<img src=x onerror=alert(1)>'
+    fakeServer({ ...signedIn, ...withHome, ...withTasks([card({ title: hostile, projects: [hostile], parent: { path: 'p.md', title: hostile } })]) })
+    render(<App />)
+    const open = within(await screen.findByRole('region', { name: 'Open' }))
+    // The parent link and the title link, both with the hostile text as their name.
+    expect(open.getAllByRole('link', { name: hostile }).map((a) => a.getAttribute('href'))).toEqual(['/focus?path=p.md', '/focus?path=Tasks%2Fx.md'])
+    expect(open.getAllByText(hostile)).toHaveLength(3) // title, parent link, project
+    expect(within(screen.getByLabelText('Project')).getByRole('option', { name: hostile })).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
   })
 })

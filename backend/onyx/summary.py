@@ -41,6 +41,7 @@ class Task:
     due: date | None
     tags: tuple[str, ...] = ()
     links: tuple[str, ...] = ()  # link targets in the body and in `projects`
+    project_links: tuple[str, ...] = ()  # link targets in `projects` only
 
 
 @dataclass(frozen=True)
@@ -165,6 +166,7 @@ def read_summary(vault: Vault) -> VaultSummary:
                     _as_date(meta.get("due")),
                     tags,
                     tuple(body_links + project_links),
+                    tuple(project_links),
                 )
             )
             history.extend(_history(body, note.path, title))
@@ -232,6 +234,62 @@ def items(summary: VaultSummary) -> list[dict]:
     found = [{"kind": "task", "path": t.path, "title": t.title} for t in summary.tasks]
     found += [{"kind": "note", "path": n.path, "title": n.title} for n in summary.notes]
     return sorted(found, key=lambda i: (i["title"].lower(), i["path"]))
+
+
+# A child task carries this tag and links to its parent task in `projects`
+# (Sheikh's decision 1a on #9). Without the tag, a `projects` link to another
+# task (a handoff linking back, say) doesn't make a sub-task.
+SUBTASK_TAG = "subtask"
+
+
+def task_board(summary: VaultSummary) -> list[dict]:
+    """Every task for the Tasks board and list: by stage, then due date, then title.
+
+    Each task's `projects` are split: a link to another task, on a task tagged
+    `subtask`, names its parent (the first such link). A link to a note, or
+    to nothing yet, is a project; other links to tasks are neither. A parent
+    gets its sub-tasks' progress."""
+    index = links.LinkIndex([t.path for t in summary.tasks] + [n.path for n in summary.notes])
+    by_path = {t.path: t for t in summary.tasks}
+
+    def resolves_to_task(target: str, task: Task) -> str | None:
+        found = index.resolve(target, task.path)
+        return found if found in by_path and found != task.path else None
+
+    parent_of: dict[str, str] = {}
+    for task in summary.tasks:
+        if SUBTASK_TAG not in task.tags:
+            continue
+        for target in task.project_links:
+            if parent := resolves_to_task(target, task):
+                parent_of[task.path] = parent
+                break
+    children: dict[str, list[str]] = {}
+    for child, parent in parent_of.items():
+        children.setdefault(parent, []).append(child)
+
+    def order(task: Task) -> tuple:
+        stage = STAGES.index(task.status) if task.status in STAGES else len(STAGES)
+        return (stage, task.due is None, task.due or date.max, task.title.lower(), task.path)
+
+    board = []
+    for task in sorted(summary.tasks, key=order):
+        parent = parent_of.get(task.path)
+        kids = children.get(task.path, [])
+        board.append(
+            {
+                **_task_json(task),
+                # Projects are links to notes (or to nothing yet), never to tasks.
+                "projects": [t for t in task.project_links if not resolves_to_task(t, task)],
+                "parent": {"path": parent, "title": by_path[parent].title} if parent else None,
+                "subtasks": (
+                    {"done": sum(by_path[k].status == "done" for k in kids), "total": len(kids)}
+                    if kids
+                    else None
+                ),
+            }
+        )
+    return board
 
 
 def _task_json(task: Task) -> dict:

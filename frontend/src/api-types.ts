@@ -23,6 +23,7 @@ export interface ApiSchemas {
   NoteSource: NoteSource
   NoteSummary: NoteSummary
   NoteTrashed: NoteTrashed
+  ParentRef: ParentRef
   RecentNote: RecentNote
   RenameNote: RenameNote
   SaveConflict: SaveConflict
@@ -32,6 +33,9 @@ export interface ApiSchemas {
   SessionStatus: SessionStatus
   SnippetPart: SnippetPart
   StageCounts: StageCounts
+  SubtaskCount: SubtaskCount
+  TaskBoard: TaskBoard
+  TaskCard: TaskCard
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
   TaskRef: TaskRef
@@ -241,6 +245,10 @@ export interface NoteTrashed {
    */
   trashed_to: string
 }
+export interface ParentRef {
+  path: string
+  title: string
+}
 export interface RenameNote {
   /**
    * The new name, same folder
@@ -287,6 +295,35 @@ export interface SearchResults {
 export interface SessionStatus {
   authenticated: boolean
 }
+export interface SubtaskCount {
+  done: number
+  total: number
+}
+export interface TaskBoard {
+  tasks: TaskCard[]
+}
+export interface TaskCard {
+  /**
+   * YYYY-MM-DD
+   */
+  due: string | null
+  /**
+   * The parent task, for a task tagged subtask
+   */
+  parent: ParentRef | null
+  path: string
+  priority: ('high' | 'normal' | 'low') | null
+  /**
+   * Project links (not the parent), as written
+   */
+  projects: string[]
+  status: ('open' | 'in-progress' | 'in-review' | 'done') | null
+  /**
+   * Sub-task progress, for a parent task
+   */
+  subtasks: SubtaskCount | null
+  title: string
+}
 
 /** The response type of each GET endpoint. */
 export interface GetResponses {
@@ -298,4 +335,5 @@ export interface GetResponses {
   '/api/notes': NoteList
   '/api/search': SearchResults
   '/api/session': SessionStatus
+  '/api/tasks': TaskBoard
 }

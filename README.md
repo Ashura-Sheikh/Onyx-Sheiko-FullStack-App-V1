@@ -107,6 +107,14 @@ These also need `--allow-writes`, and work on notes only: tasks get theirs in [#
 - **Delete** moves the note to the vault's `.trash` folder, keeping its folders (`.trash/Projects/Note.md`), like Obsidian's own trash. Get it back from there in Finder or Obsidian. If a note with that name is already in the trash, the new one gets the date and time in its name.
 - Rename and delete are refused if the note changed on disk since the dialog opened it. A note reached through a symlink is never moved.
 
+### Tasks
+
+**Tasks** shows every task (a note tagged `task`) as a board by stage (Open, In progress, In review, Done) or as a list. The board is the default. Filter by stage, priority or project; the view and filters stay in the address, so a filtered view can be bookmarked. Opening a task shows it in the focus view. A task whose stage isn't one of the four goes in a **No stage** column, shown only when there is one.
+
+**Sub-tasks:** a task tagged `subtask` that links to another task in `projects` is that task's sub-task. Its card says "Sub-task of …", and the parent's card shows how many of its sub-tasks are done. A `projects` link to a task *without* the `subtask` tag (a handoff note linking back to its task, say) doesn't make a sub-task, and isn't shown as a project. Links to notes are projects.
+
+The Tasks page is read-only for now; moving tasks between stages, sign-off and creating tasks come in the next parts of [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9).
+
 **Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
 
 **Trying the API directly:** every `/api` request needs the header `X-Onyx-Request: 1`:
