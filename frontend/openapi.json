@@ -1,6 +1,53 @@
 {
   "components": {
     "schemas": {
+      "CreateNote": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "description": "An existing folder; \"\" is the top level",
+            "maxLength": 512,
+            "title": "Folder",
+            "type": "string"
+          },
+          "name": {
+            "description": "The note's name; .md is added",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "CreateNote",
+        "type": "object"
+      },
+      "DeleteNote": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "DeleteNote",
+        "type": "object"
+      },
       "ErrorResponse": {
         "additionalProperties": false,
         "properties": {
@@ -207,6 +254,49 @@
         "title": "LaunchCode",
         "type": "object"
       },
+      "MoveRefused": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "reason": {
+            "description": "changed: the note changed on disk since it was opened; exists: a note with the new name is already there",
+            "enum": [
+              "changed",
+              "exists"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail",
+          "reason"
+        ],
+        "title": "MoveRefused",
+        "type": "object"
+      },
+      "NoteCreated": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "NoteCreated",
+        "type": "object"
+      },
       "NoteDetail": {
         "additionalProperties": false,
         "properties": {
@@ -338,6 +428,21 @@
         "title": "NoteRef",
         "type": "object"
       },
+      "NoteRenamed": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "description": "The note's new path",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "NoteRenamed",
+        "type": "object"
+      },
       "NoteSaved": {
         "additionalProperties": false,
         "properties": {
@@ -433,6 +538,21 @@
         "title": "NoteSummary",
         "type": "object"
       },
+      "NoteTrashed": {
+        "additionalProperties": false,
+        "properties": {
+          "trashed_to": {
+            "description": "Where the note went, inside the vault's .trash folder",
+            "title": "Trashed To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trashed_to"
+        ],
+        "title": "NoteTrashed",
+        "type": "object"
+      },
       "RecentNote": {
         "additionalProperties": false,
         "properties": {
@@ -461,6 +581,37 @@
           "updated"
         ],
         "title": "RecentNote",
+        "type": "object"
+      },
+      "RenameNote": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "The new name, same folder",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "version"
+        ],
+        "title": "RenameNote",
         "type": "object"
       },
       "SaveConflict": {
@@ -1137,6 +1288,162 @@
         "summary": "Save Note"
       }
     },
+    "/api/note/delete": {
+      "post": {
+        "operationId": "delete_note_api_note_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteTrashed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A task"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such note"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Note"
+      }
+    },
+    "/api/note/rename": {
+      "post": {
+        "operationId": "rename_note_api_note_rename_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteRenamed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Name not allowed, or a task"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such note"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk, or name taken"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Note"
+      }
+    },
     "/api/note/source": {
       "get": {
         "operationId": "note_source_api_note_source_get",
@@ -1204,6 +1511,72 @@
           }
         },
         "summary": "Notes"
+      },
+      "post": {
+        "operationId": "create_note_api_notes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Name or folder not allowed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "A note with that name exists"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Note"
       }
     },
     "/api/search": {

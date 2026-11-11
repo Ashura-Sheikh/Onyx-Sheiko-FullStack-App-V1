@@ -35,6 +35,8 @@ def test_schema_lists_the_api_and_nothing_else():
         "/api/search",
         "/api/note",
         "/api/note/source",
+        "/api/note/rename",
+        "/api/note/delete",
         "/api/health",
     }
 
