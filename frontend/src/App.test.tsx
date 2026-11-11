@@ -1230,6 +1230,15 @@ describe('changes while editing', () => {
     expect(await screen.findByText('No changes yet.')).toBeInTheDocument()
   })
 
+  it('a rewrite too large to compare says so instead of comparing', async () => {
+    const lines = (word: string) => Array.from({ length: 2100 }, (_, k) => `${word} ${k}`).join('\n')
+    const { box } = await edit({ ...SOURCE, body: lines('old') })
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
+    setText(box, lines('new'))
+    expect(await screen.findByText('Too many changes to compare line by line. Your text is unaffected.')).toBeInTheDocument()
+    expect(box.value).toBe(lines('new'))
+  })
+
   it('shows changed lines as text, never as HTML', async () => {
     const { box } = await edit()
     await userEvent.click(screen.getByRole('button', { name: 'Changes' }))
