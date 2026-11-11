@@ -2,6 +2,7 @@
 // cookie handling can't be forgotten (threat model T1, T2).
 
 import type {
+  AppSettings,
   CreateNote,
   DeleteNote,
   GetResponses,
@@ -10,6 +11,7 @@ import type {
   Item,
   LaunchCode,
   MoveRefused,
+  MoveTask,
   NoteCreated,
   NoteDetail,
   NoteRenamed,
@@ -22,6 +24,7 @@ import type {
   SaveNote,
   SearchResult,
   TaskCard,
+  TaskMoved,
   TaskSummary,
 } from './api-types'
 
@@ -97,7 +100,7 @@ export async function signOut(): Promise<void> {
 
 export type Stage = NonNullable<TaskSummary['status']>
 export type Priority = NonNullable<TaskSummary['priority']>
-export type { HistoryEntry, HomeData, Item, NoteDetail, NoteSaved, NoteSource, NoteSummary, SaveConflict, SearchResult, TaskCard, TaskSummary }
+export type { AppSettings, HistoryEntry, HomeData, Item, NoteDetail, NoteSaved, NoteSource, NoteSummary, SaveConflict, SearchResult, TaskCard, TaskSummary }
 
 export async function getHome(): Promise<HomeData> {
   return apiGet('/api/home')
@@ -114,6 +117,22 @@ export async function search(text: string): Promise<SearchResult[]> {
 
 /** Search starts at this many characters. */
 export const SEARCH_MIN_CHARS = 2
+
+/** Whether writes are on (--allow-writes) and the sign-off name (--identity). */
+export async function getAppSettings(): Promise<AppSettings> {
+  return apiGet('/api/app-settings')
+}
+
+/**
+ * Move a task one stage on. `version` is the one that was opened: if the file
+ * changed since, the server refuses (409) and nothing is written. Moving to
+ * done signs off under the server's --identity.
+ */
+export async function moveTask(path: string, to: Stage, version: string): Promise<TaskMoved> {
+  const request: MoveTask = { path, to, version }
+  const response = await apiFetch('/api/task/move', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as TaskMoved
+}
 
 /** Every task for the Tasks board and list, by stage, then due date, then title. */
 export async function getTasks(): Promise<TaskCard[]> {
