@@ -205,6 +205,19 @@ def test_a_replacement_before_the_old_name_is_removed_is_caught(setup, monkeypat
     assert files(root) == [ATLAS, "Top.md"]
 
 
+def test_a_stale_version_never_makes_a_second_name(setup, monkeypatch):
+    # Refused before linking, so Obsidian never sees the note twice, even briefly.
+    vault, root, _ = setup
+    links = []
+    monkeypatch.setattr(vault_module.os, "link", lambda *a, **k: links.append(a))
+    (root / ATLAS).write_text("changed\n")
+    with pytest.raises(VersionConflict):
+        vault.rename(ATLAS, "Projects/New.md", "0" * 64)
+    with pytest.raises(VersionConflict):
+        vault.trash(ATLAS, "0" * 64, NOW)
+    assert links == []
+
+
 def test_a_disk_without_links_moves_nothing(setup, monkeypatch):
     vault, root, _ = setup
 

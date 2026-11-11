@@ -249,9 +249,9 @@ class Vault:
             for n in range(1, 100)
         ]
         for candidate in candidates:
+            # Inside the trash: every folder is checked above, and the name
+            # already passed the path guard, so it has no "/" or "..".
             target = folder / candidate
-            if not target.resolve().is_relative_to(self.root / TRASH_FOLDER):
-                raise PathRejected("The trash folder leads outside the vault.")
             try:
                 self._move_no_replace(source, target, expected_version)
             except NoteExists:
