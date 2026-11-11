@@ -32,11 +32,15 @@ export interface ApiSchemas {
   SessionStatus: SessionStatus
   SnippetPart: SnippetPart
   StageCounts: StageCounts
+  SubtaskCount: SubtaskCount
+  TaskBoard: TaskBoard
+  TaskCard: TaskCard
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
-  TaskRef: TaskRef
   TaskSummary: TaskSummary
   ValidationError: ValidationError
+  onyx__models__TaskRef__1: TaskRef1
+  onyx__models__TaskRef__2: TaskRef
 }
 export interface CreateNote {
   /**
@@ -287,6 +291,39 @@ export interface SearchResults {
 export interface SessionStatus {
   authenticated: boolean
 }
+export interface SubtaskCount {
+  done: number
+  total: number
+}
+export interface TaskBoard {
+  tasks: TaskCard[]
+}
+export interface TaskCard {
+  /**
+   * YYYY-MM-DD
+   */
+  due: string | null
+  /**
+   * The parent task, for a task tagged subtask
+   */
+  parent: TaskRef1 | null
+  path: string
+  priority: ('high' | 'normal' | 'low') | null
+  /**
+   * Project links (not the parent), as written
+   */
+  projects: string[]
+  status: ('open' | 'in-progress' | 'in-review' | 'done') | null
+  /**
+   * Sub-task progress, for a parent task
+   */
+  subtasks: SubtaskCount | null
+  title: string
+}
+export interface TaskRef1 {
+  path: string
+  title: string
+}
 
 /** The response type of each GET endpoint. */
 export interface GetResponses {
@@ -298,4 +335,5 @@ export interface GetResponses {
   '/api/notes': NoteList
   '/api/search': SearchResults
   '/api/session': SessionStatus
+  '/api/tasks': TaskBoard
 }

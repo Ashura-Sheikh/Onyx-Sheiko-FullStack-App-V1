@@ -167,4 +167,4 @@ def test_app_start_builds_the_cache_from_dev_vault(private_cache_dir):
     cache = app.state.cache
     assert cache.path.parent == Path(os.path.realpath(private_cache_dir))
     assert cache.paths() == app.state.vault.list_notes()
-    assert len(cache.paths()) == 28
+    assert len(cache.paths()) == 31

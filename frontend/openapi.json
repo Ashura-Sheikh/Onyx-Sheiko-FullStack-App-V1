@@ -344,7 +344,7 @@
           },
           "related_tasks": {
             "items": {
-              "$ref": "#/components/schemas/TaskRef"
+              "$ref": "#/components/schemas/onyx__models__TaskRef__2"
             },
             "title": "Related Tasks",
             "type": "array"
@@ -791,6 +791,142 @@
         "title": "StageCounts",
         "type": "object"
       },
+      "SubtaskCount": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "SubtaskCount",
+        "type": "object"
+      },
+      "TaskBoard": {
+        "additionalProperties": false,
+        "properties": {
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskCard"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "TaskBoard",
+        "type": "object"
+      },
+      "TaskCard": {
+        "additionalProperties": false,
+        "properties": {
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "YYYY-MM-DD",
+            "title": "Due"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/onyx__models__TaskRef__1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The parent task, for a task tagged subtask"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "normal",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "projects": {
+            "description": "Project links (not the parent), as written",
+            "items": {
+              "type": "string"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "in-progress",
+                  "in-review",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "subtasks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubtaskCount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sub-task progress, for a parent task"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "status",
+          "priority",
+          "due",
+          "projects",
+          "parent",
+          "subtasks"
+        ],
+        "title": "TaskCard",
+        "type": "object"
+      },
       "TaskDetail": {
         "additionalProperties": false,
         "properties": {
@@ -955,43 +1091,6 @@
         "title": "TaskHistoryEntry",
         "type": "object"
       },
-      "TaskRef": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "open",
-                  "in-progress",
-                  "in-review",
-                  "done"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "title",
-          "status"
-        ],
-        "title": "TaskRef",
-        "type": "object"
-      },
       "TaskSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1097,6 +1196,62 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "onyx__models__TaskRef__1": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title"
+        ],
+        "title": "TaskRef",
+        "type": "object"
+      },
+      "onyx__models__TaskRef__2": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "in-progress",
+                  "in-review",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "status"
+        ],
+        "title": "TaskRef",
         "type": "object"
       }
     }
@@ -1684,6 +1839,24 @@
           }
         },
         "summary": "Sign In"
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "operationId": "tasks_api_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskBoard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tasks"
       }
     }
   }

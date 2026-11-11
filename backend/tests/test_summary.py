@@ -262,7 +262,7 @@ def test_items_list_every_note_and_task_by_title(tmp_path):
 def test_dev_vault_home_on_16_april_2031():
     home = summary.home(summary.read_summary(Vault(DEV_VAULT)), TODAY)
     assert home["today"] == "2031-04-16"
-    assert home["counts"] == {"open": 4, "in-progress": 3, "in-review": 2, "done": 3}
+    assert home["counts"] == {"open": 5, "in-progress": 4, "in-review": 2, "done": 4}
     assert [t["title"] for t in home["due"]] == [
         "Pick a layout after design review",
         "Plan weekly sync agenda",
@@ -304,7 +304,7 @@ def test_items_endpoint(app):
     client = TestClient(app, base_url=BASE)
     session = sign_in(client, app)
     found = client.get("/api/items", headers=with_session(session)).json()["items"]
-    assert len(found) == 28
+    assert len(found) == 31
     assert {
         "kind": "task",
         "path": "Tasks/Tidy Reference folder.md",

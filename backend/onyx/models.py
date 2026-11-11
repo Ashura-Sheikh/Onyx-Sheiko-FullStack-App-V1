@@ -197,3 +197,23 @@ class MoveRefused(Model):
         description="changed: the note changed on disk since it was opened; "
         "exists: a note with the new name is already there"
     )
+
+
+class TaskRef(Model):
+    path: str
+    title: str
+
+
+class SubtaskCount(Model):
+    done: int
+    total: int
+
+
+class TaskCard(TaskSummary):
+    projects: list[str] = Field(description="Project links (not the parent), as written")
+    parent: TaskRef | None = Field(description="The parent task, for a task tagged subtask")
+    subtasks: SubtaskCount | None = Field(description="Sub-task progress, for a parent task")
+
+
+class TaskBoard(Model):
+    tasks: list[TaskCard]
