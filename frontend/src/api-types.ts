@@ -3,6 +3,7 @@
 // backend/ and `npm run gen:api` here. A test fails if this file is out of date.
 
 export interface ApiSchemas {
+  AppSettings: AppSettings
   CreateNote: CreateNote
   DeleteNote: DeleteNote
   ErrorResponse: ErrorResponse
@@ -14,6 +15,7 @@ export interface ApiSchemas {
   ItemList: ItemList
   LaunchCode: LaunchCode
   MoveRefused: MoveRefused
+  MoveTask: MoveTask
   NoteCreated: NoteCreated
   NoteDetail: NoteDetail
   NoteList: NoteList
@@ -38,9 +40,20 @@ export interface ApiSchemas {
   TaskCard: TaskCard
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
+  TaskMoved: TaskMoved
   TaskRef: TaskRef
   TaskSummary: TaskSummary
   ValidationError: ValidationError
+}
+export interface AppSettings {
+  /**
+   * The sign-off name (--identity); null if not set
+   */
+  identity: string | null
+  /**
+   * False unless the server was started with --allow-writes
+   */
+  writable: boolean
 }
 export interface CreateNote {
   /**
@@ -139,6 +152,14 @@ export interface MoveRefused {
    * changed: the note changed on disk since it was opened; exists: a note with the new name is already there
    */
   reason: 'changed' | 'exists'
+}
+export interface MoveTask {
+  path: string
+  to: 'open' | 'in-progress' | 'in-review' | 'done'
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface NoteCreated {
   path: string
@@ -324,9 +345,15 @@ export interface TaskCard {
   subtasks: SubtaskCount | null
   title: string
 }
+export interface TaskMoved {
+  path: string
+  status: 'open' | 'in-progress' | 'in-review' | 'done'
+  version: string
+}
 
 /** The response type of each GET endpoint. */
 export interface GetResponses {
+  '/api/app-settings': AppSettings
   '/api/health': Health
   '/api/home': HomeData
   '/api/items': ItemList

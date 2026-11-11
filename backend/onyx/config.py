@@ -6,6 +6,7 @@ The server always binds to 127.0.0.1; there is deliberately no option to
 change that (threat model: local, single-user).
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -26,6 +27,9 @@ MAX_BODY_BYTES = 1024 * 1024
 # session lasts. Sessions also end when the server stops (they're in memory).
 LAUNCH_CODE_TTL_SECONDS = 10 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
+
+
+IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}")
 
 
 class ConfigError(ValueError):
@@ -50,6 +54,10 @@ class Settings:
     # Notes can only be changed when the server is started with --allow-writes
     # (python -m onyx.try_writes sets it, on a throwaway copy of dev-vault/).
     allow_writes: bool = False
+    # The name sign-offs are recorded under (--identity), like Sheiko's
+    # identity setting. Not a login: it records who started the server. None =
+    # moving a task to done is refused.
+    identity: str | None = None
 
     @property
     def allowed_origins(self) -> frozenset[str]:
@@ -62,6 +70,7 @@ def load_settings(
     port: int = DEFAULT_PORT,
     today: str | None = None,
     allow_writes: bool = False,
+    identity: str | None = None,
 ) -> Settings:
     if vault is None or str(vault).strip() == "":
         raise ConfigError("A vault folder is required (--vault PATH or ONYX_VAULT).")
@@ -85,4 +94,19 @@ def load_settings(
             "--allow-writes can't be used on a folder inside the repository. "
             "Use python -m onyx.try_writes, which makes a copy of dev-vault/."
         )
-    return Settings(vault=path.resolve(), port=port, today=fixed_today, allow_writes=allow_writes)
+    if identity is not None:
+        identity = identity.strip()
+        # Written into notes ("signed off by <name>", a Context line, closedBy),
+        # so only plain names.
+        if not IDENTITY.fullmatch(identity):
+            raise ConfigError(
+                "--identity must be 1 to 64 letters, digits, spaces, dots, dashes or "
+                "underscores, starting with a letter or digit."
+            )
+    return Settings(
+        vault=path.resolve(),
+        port=port,
+        today=fixed_today,
+        allow_writes=allow_writes,
+        identity=identity,
+    )

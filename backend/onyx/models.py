@@ -217,3 +217,14 @@ class TaskCard(TaskSummary):
 
 class TaskBoard(Model):
     tasks: list[TaskCard]
+
+
+class AppSettings(Model):
+    writable: bool = Field(description="False unless the server was started with --allow-writes")
+    identity: str | None = Field(description="The sign-off name (--identity); null if not set")
+
+
+class TaskMoved(Model):
+    path: str
+    version: str
+    status: Stage
