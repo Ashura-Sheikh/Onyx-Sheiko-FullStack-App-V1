@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ApiError, getNoteSource, saveNote, type NoteDetail, type NoteSource } from './api'
+import Changes from './Changes'
 import Markdown from './Markdown'
 import { applied, applyFormat, TOOLBAR, type Format } from './markdownFormat'
 import { shownBody } from './readView'
@@ -60,7 +61,9 @@ function Form({ source, note, leaving, onReload, onClose }: FormProps) {
   const box = useRef<HTMLTextAreaElement>(null)
   // Where to put the selection once a toolbar edit has been rendered.
   const pendingSelection = useRef<[number, number] | null>(null)
-  const previewText = shownBody(useDeferredValue(draft), note.title)
+  const deferred = useDeferredValue(draft)
+  const previewText = shownBody(deferred, note.title)
+  const [side, setSide] = useState<'preview' | 'changes'>('preview')
 
   useLayoutEffect(() => {
     const selection = pendingSelection.current
@@ -189,15 +192,35 @@ function Form({ source, note, leaving, onReload, onClose }: FormProps) {
               className="min-h-[50vh] w-full resize-y rounded-lg border border-stone-300 bg-transparent p-3 font-mono text-sm leading-6 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-stone-700"
             />
           </div>
-          <section aria-label="Preview" className="min-w-0 rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700 @4xl:max-h-[75vh] @4xl:overflow-auto">
-            <h2 className="mb-2 text-xs font-medium tracking-wide text-stone-500 uppercase">Preview</h2>
-            <div className={note.kind === 'note' ? 'font-serif text-lg leading-8' : undefined}>
-              {previewText.trim() === '' ? (
-                <p className="text-stone-500">Nothing to show yet.</p>
-              ) : (
-                <Markdown text={previewText} links={note.links} preview />
-              )}
+          <section
+            aria-label={side === 'preview' ? 'Preview' : 'Changes'}
+            className="min-w-0 rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700 @4xl:max-h-[75vh] @4xl:overflow-auto"
+          >
+            {/* Preview, or + / − against the note as it was opened (nothing is kept). */}
+            <div role="group" aria-label="Show" className="mb-2 inline-flex rounded-full border border-stone-300 p-0.5 text-xs dark:border-stone-700">
+              {(['preview', 'changes'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={side === s}
+                  onClick={() => setSide(s)}
+                  className={`rounded-full px-2.5 py-0.5 font-medium tracking-wide uppercase ${side === s ? 'bg-stone-200 dark:bg-stone-800' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900'}`}
+                >
+                  {s === 'preview' ? 'Preview' : 'Changes'}
+                </button>
+              ))}
             </div>
+            {side === 'changes' ? (
+              <Changes before={source.body} after={deferred} />
+            ) : (
+              <div className={note.kind === 'note' ? 'font-serif text-lg leading-8' : undefined}>
+                {previewText.trim() === '' ? (
+                  <p className="text-stone-500">Nothing to show yet.</p>
+                ) : (
+                  <Markdown text={previewText} links={note.links} preview />
+                )}
+              </div>
+            )}
           </section>
         </div>
       </div>

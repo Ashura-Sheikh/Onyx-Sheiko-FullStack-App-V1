@@ -91,6 +91,7 @@ In a note, **Edit** opens its body as plain Markdown. **Save** (or ⌘S / Ctrl+S
 
 - A toolbar above the text adds Markdown: Heading, Bold, Italic, bulleted and numbered lists, Checkbox, Quote, Link, `[[Wikilink]]` and Code. Each one formats the selected text, or the lines it touches. Pressing it again removes the formatting. ⌘B / Ctrl+B and ⌘I / Ctrl+I work too.
 - A live preview beside the text shows the note as Read will (below the text when the window is narrow). A `[[link]]` you've just added is checked against the vault when you save.
+- **Changes**, next to Preview, shows your edit line by line: removed lines with −, added lines with +, and two unchanged lines around each change, with the rest folded. It compares against the note as you opened it and keeps no history. Windows line endings don't count as a change. A very large rewrite (more than about 4 million line pairs to compare) isn't compared line by line.
 
 - Only the body is edited. The frontmatter (the fields between the `---` lines, including tags) is shown above the box, and kept byte for byte. Edit fields in Obsidian for now.
 - The body includes sections the reading view leaves out, such as `## Status History`.
