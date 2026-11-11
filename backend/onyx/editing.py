@@ -18,7 +18,11 @@ up the vault's own listing; the name that's opened or written always comes
 from the listing (threat model T5).
 """
 
+from datetime import datetime
+from pathlib import PurePosixPath
+
 from onyx import frontmatter
+from onyx.summary import is_task
 from onyx.vault import Note, NoteNotFound, PathRejected, Vault
 
 
@@ -74,6 +78,74 @@ def save_body(vault: Vault, requested: str, body: str, version: str) -> Note:
     # before it replaces the file; if `current` was already a different
     # version, the new text is never written.
     return vault.update(name, head + with_line_endings_of(body, current.text), version)
+
+
+# --- Create, rename, delete (part (d) of issue #8) ---------------------------------
+#
+# Notes only: a task (tagged "task") is renamed or deleted in Tasks (#9), where
+# Sheiko's lifecycle rules are handled. Rename keeps the note in its folder; it
+# doesn't rewrite [[links]] in other notes (Sheikh's decisions on #8).
+
+# Not allowed in a note name typed into Onyx: a folder separator, characters
+# Windows and Obsidian refuse in file names, and ones that break [[links]].
+_BAD_NAME_CHARS = set('/\\:*?"<>|#^[]')
+
+
+class TaskNotHere(ValueError):
+    """A task, not a note: renamed and deleted in Tasks, not here."""
+
+
+def note_file_name(typed: str) -> str:
+    """What the user typed → a file name ending in .md. Raises PathRejected
+    with a message for the user."""
+    name = typed.strip()
+    if name.casefold().endswith(".md"):
+        name = name[:-3].rstrip()
+    if name == "":
+        raise PathRejected("name-empty")
+    if any(c in _BAD_NAME_CHARS or ord(c) < 32 or ord(c) == 127 for c in name):
+        raise PathRejected("name-character")
+    if name.startswith("."):
+        raise PathRejected("name-dot")
+    return name + ".md"
+
+
+def _in_folder(folder: str, file_name: str) -> str:
+    return f"{folder}/{file_name}" if folder else file_name
+
+
+def _only_notes(vault: Vault, name: str) -> Note:
+    try:
+        note = vault.read(name)
+    except (PathRejected, UnicodeDecodeError) as error:
+        raise NoteNotFound(name) from error
+    meta, _ = frontmatter.split(note.text)
+    if is_task(meta):
+        raise TaskNotHere(name)
+    return note
+
+
+def create_note(vault: Vault, folder: str, typed_name: str) -> Note:
+    """An empty note in an existing folder ("" is the top level). Never
+    replaces a file (NoteExists)."""
+    vault.resolve_folder(folder)
+    return vault.create(_in_folder(folder, note_file_name(typed_name)), "")
+
+
+def rename_note(vault: Vault, requested: str, typed_name: str, version: str) -> str:
+    """Rename a note in its folder. Returns the new path."""
+    name = _listed(vault, requested)
+    _only_notes(vault, name)
+    folder = str(PurePosixPath(name).parent)
+    new = _in_folder("" if folder == "." else folder, note_file_name(typed_name))
+    return vault.rename(name, new, version)
+
+
+def delete_note(vault: Vault, requested: str, version: str, now: datetime) -> str:
+    """Move a note to the vault's .trash folder. Returns where it went."""
+    name = _listed(vault, requested)
+    _only_notes(vault, name)
+    return vault.trash(name, version, now)
 
 
 def current_version(vault: Vault, name: str) -> str | None:

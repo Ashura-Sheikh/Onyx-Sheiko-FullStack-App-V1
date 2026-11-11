@@ -3,6 +3,8 @@
 // backend/ and `npm run gen:api` here. A test fails if this file is out of date.
 
 export interface ApiSchemas {
+  CreateNote: CreateNote
+  DeleteNote: DeleteNote
   ErrorResponse: ErrorResponse
   HTTPValidationError: HTTPValidationError
   Health: Health
@@ -11,13 +13,18 @@ export interface ApiSchemas {
   Item: Item
   ItemList: ItemList
   LaunchCode: LaunchCode
+  MoveRefused: MoveRefused
+  NoteCreated: NoteCreated
   NoteDetail: NoteDetail
   NoteList: NoteList
   NoteRef: NoteRef
+  NoteRenamed: NoteRenamed
   NoteSaved: NoteSaved
   NoteSource: NoteSource
   NoteSummary: NoteSummary
+  NoteTrashed: NoteTrashed
   RecentNote: RecentNote
+  RenameNote: RenameNote
   SaveConflict: SaveConflict
   SaveNote: SaveNote
   SearchResult: SearchResult
@@ -30,6 +37,23 @@ export interface ApiSchemas {
   TaskRef: TaskRef
   TaskSummary: TaskSummary
   ValidationError: ValidationError
+}
+export interface CreateNote {
+  /**
+   * An existing folder; "" is the top level
+   */
+  folder: string
+  /**
+   * The note's name; .md is added
+   */
+  name: string
+}
+export interface DeleteNote {
+  path: string
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface ErrorResponse {
   detail: string
@@ -105,6 +129,17 @@ export interface ItemList {
 export interface LaunchCode {
   code: string
 }
+export interface MoveRefused {
+  detail: string
+  /**
+   * changed: the note changed on disk since it was opened; exists: a note with the new name is already there
+   */
+  reason: 'changed' | 'exists'
+}
+export interface NoteCreated {
+  path: string
+  version: string
+}
 export interface NoteDetail {
   backlinks: NoteRef[]
   body: string
@@ -171,6 +206,12 @@ export interface NoteSummary {
    */
   updated: string
 }
+export interface NoteRenamed {
+  /**
+   * The note's new path
+   */
+  path: string
+}
 export interface NoteSaved {
   path: string
   version: string
@@ -193,6 +234,23 @@ export interface NoteSource {
    * False unless the server was started with --allow-writes
    */
   writable: boolean
+}
+export interface NoteTrashed {
+  /**
+   * Where the note went, inside the vault's .trash folder
+   */
+  trashed_to: string
+}
+export interface RenameNote {
+  /**
+   * The new name, same folder
+   */
+  name: string
+  path: string
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface SaveConflict {
   detail: string

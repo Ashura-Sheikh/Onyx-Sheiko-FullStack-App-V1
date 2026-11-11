@@ -36,5 +36,8 @@ dist/
 .vscode/
 *.swp
 
-# Obsidian settings, if a vault is opened on this folder
+# Obsidian settings and trash, if a vault is opened on this folder. Onyx's
+# delete moves notes into .trash/; writes only ever run on a copy of
+# dev-vault/ outside the repo, so this is a second line of defence.
 .obsidian/
+.trash/

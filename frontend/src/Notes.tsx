@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { focusPath, getNotes, notesPath, search, SEARCH_MIN_CHARS, type NoteSummary } from './api'
 import { dateTime } from './labels'
+import { NewNote } from './NoteActions'
 import { buildTree, filterNotes, type Folder } from './notesTree'
 import Snippet from './Snippet'
 import { useDebounced } from './useDebounced'
@@ -129,6 +130,8 @@ export default function Notes() {
   const folder = params.get('folder') ?? undefined
   const tag = params.get('tag') ?? undefined
   const q = params.get('q') ?? undefined
+  // Set after a note is moved to the trash.
+  const notice = (useLocation().state as { notice?: unknown } | null)?.notice
   const notes = useQuery({ queryKey: ['notes'], queryFn: getNotes })
   const sizes = useDefaultLayout({ id: 'onyx-notes', panelIds: ['tree', 'list'], storage: localStorage })
 
@@ -171,7 +174,16 @@ export default function Notes() {
                 Show all
               </Link>
             )}
+            <span className="ml-auto">
+              {/* In the folder being shown; from All notes, a tag or a search (no folder), at the top level. */}
+              <NewNote folder={folder ?? ''} />
+            </span>
           </div>
+          {typeof notice === 'string' && (
+            <p role="status" className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+              {notice}
+            </p>
+          )}
           <SearchBox value={q ?? ''} />
           {q !== undefined ? <SearchResults typed={q} /> : <NoteList notes={shown} />}
         </section>

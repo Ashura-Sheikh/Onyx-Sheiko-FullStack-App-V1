@@ -77,7 +77,7 @@ def _title(meta: dict, body: str, path: str) -> str:
     )
 
 
-def _is_task(meta: dict) -> bool:
+def is_task(meta: dict) -> bool:
     tags = meta.get("tags")
     if isinstance(tags, str):
         tags = [tags]
@@ -150,7 +150,7 @@ def read_summary(vault: Vault) -> VaultSummary:
         title = _title(meta, body, note.path)
         tags = tuple(t for t in _strings(meta.get("tags")) if t != "task")
         body_links = links.find_links(body)
-        if _is_task(meta):
+        if is_task(meta):
             status = meta.get("status") if meta.get("status") in STAGES else None
             priority = meta.get("priority") if meta.get("priority") in PRIORITIES else None
             project_links = [
@@ -296,7 +296,7 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
         "path": note.path,
         "title": title,
         "folder": "" if folder == "." else folder,
-        "kind": "task" if _is_task(meta) else "note",
+        "kind": "task" if is_task(meta) else "note",
         "updated": (_as_datetime(meta.get("dateModified")) or modified).isoformat(),
         "tags": [t for t in _strings(meta.get("tags")) if t != "task"],
         "body": shown,
@@ -365,7 +365,7 @@ def searchable(text: str, path: str) -> tuple[str, str, str, str]:
     folder = str(PurePosixPath(path).parent)
     return (
         title,
-        "task" if _is_task(meta) else "note",
+        "task" if is_task(meta) else "note",
         "" if folder == "." else folder,
         shown.strip("\n"),
     )

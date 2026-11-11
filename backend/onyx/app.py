@@ -1,6 +1,6 @@
 """The FastAPI app. Build one with create_app(settings) per server run."""
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
@@ -12,7 +12,15 @@ from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
 from onyx.security import ApiGuard, BodySizeLimit, SecurityHeaders, session_from_scope
-from onyx.vault import NoteNotFound, Vault, VersionConflict
+from onyx.vault import (
+    REFUSALS,
+    MoveNotSupported,
+    NoteExists,
+    NoteNotFound,
+    PathRejected,
+    Vault,
+    VersionConflict,
+)
 from onyx.web import mount_frontend
 
 
@@ -26,6 +34,30 @@ class SaveNote(BaseModel):
     path: str = Field(min_length=1, max_length=512)
     body: str = Field(max_length=config.MAX_BODY_BYTES)
     version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version the editor opened")
+
+
+class CreateNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    folder: str = Field(max_length=512, description='An existing folder; "" is the top level')
+    name: str = Field(min_length=1, max_length=255, description="The note's name; .md is added")
+
+
+class RenameNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1, max_length=512)
+    name: str = Field(min_length=1, max_length=255, description="The new name, same folder")
+    version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+class DeleteNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1, max_length=512)
+    version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+def now() -> datetime:
+    """Local time, for the name of a note moved to .trash over an older one."""
+    return datetime.now()
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -152,6 +184,106 @@ def create_app(settings: Settings) -> FastAPI:
             )
         # No cache update needed: search catches up with changed files itself.
         return {"path": saved.path, "version": saved.version}
+
+    # Part (d) of #8: create, rename, delete. Notes only; tasks are #9.
+    def writes_off() -> JSONResponse:
+        # A new response each time: middleware adds headers to a response's own list.
+        return JSONResponse(
+            {"detail": "Writes are turned off. Start the server with --allow-writes."},
+            status_code=403,
+        )
+
+    def refused(error: Exception) -> JSONResponse:
+        if isinstance(error, NoteNotFound):
+            return JSONResponse({"detail": "Note not found"}, status_code=404)
+        if isinstance(error, editing.TaskNotHere):
+            return JSONResponse(
+                {"detail": "This is a task. Rename or delete it in Tasks."}, status_code=400
+            )
+        if isinstance(error, PathRejected):
+            # A fixed sentence chosen by code, never the exception's own text.
+            detail = REFUSALS.get(error.code, "That name or path isn't allowed.")
+            return JSONResponse({"detail": detail}, status_code=400)
+        if isinstance(error, VersionConflict):
+            return JSONResponse(
+                {"detail": "The note changed on disk since you opened it.", "reason": "changed"},
+                status_code=409,
+            )
+        if isinstance(error, NoteExists):
+            return JSONResponse(
+                {"detail": "A note with that name is already there.", "reason": "exists"},
+                status_code=409,
+            )
+        if isinstance(error, MoveNotSupported):
+            return JSONResponse(
+                {"detail": "This disk can't move the note safely, so nothing was moved."},
+                status_code=500,
+            )
+        raise error
+
+    write_errors = (
+        NoteNotFound,
+        editing.TaskNotHere,
+        PathRejected,
+        VersionConflict,
+        NoteExists,
+        MoveNotSupported,
+    )
+
+    @app.post(
+        "/api/notes",
+        status_code=201,
+        response_model=models.NoteCreated,
+        responses={
+            400: {"model": models.ErrorResponse, "description": "Name or folder not allowed"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            409: {"model": models.MoveRefused, "description": "A note with that name exists"},
+        },
+    )
+    def create_note(body: CreateNote) -> dict:
+        if not settings.allow_writes:
+            return writes_off()
+        try:
+            created = editing.create_note(vault, body.folder, body.name)
+        except write_errors as error:
+            return refused(error)
+        return {"path": created.path, "version": created.version}
+
+    @app.post(
+        "/api/note/rename",
+        response_model=models.NoteRenamed,
+        responses={
+            400: {"model": models.ErrorResponse, "description": "Name not allowed, or a task"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such note"},
+            409: {"model": models.MoveRefused, "description": "Changed on disk, or name taken"},
+        },
+    )
+    def rename_note(body: RenameNote) -> dict:
+        if not settings.allow_writes:
+            return writes_off()
+        try:
+            return {"path": editing.rename_note(vault, body.path, body.name, body.version)}
+        except write_errors as error:
+            return refused(error)
+
+    @app.post(
+        "/api/note/delete",
+        response_model=models.NoteTrashed,
+        responses={
+            400: {"model": models.ErrorResponse, "description": "A task"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such note"},
+            409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},
+        },
+    )
+    def delete_note(body: DeleteNote) -> dict:
+        if not settings.allow_writes:
+            return writes_off()
+        try:
+            return {"trashed_to": editing.delete_note(vault, body.path, body.version, now())}
+        except write_errors as error:
+            return refused(error)
 
     @app.get("/api/health", response_model=models.Health)
     def health() -> dict[str, str]:

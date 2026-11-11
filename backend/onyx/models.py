@@ -176,3 +176,24 @@ class NoteSaved(Model):
 class SaveConflict(Model):
     detail: str
     version: str | None = Field(description="The file's version now (null: it's gone)")
+
+
+class NoteCreated(Model):
+    path: str
+    version: str
+
+
+class NoteRenamed(Model):
+    path: str = Field(description="The note's new path")
+
+
+class NoteTrashed(Model):
+    trashed_to: str = Field(description="Where the note went, inside the vault's .trash folder")
+
+
+class MoveRefused(Model):
+    detail: str
+    reason: Literal["changed", "exists"] = Field(
+        description="changed: the note changed on disk since it was opened; "
+        "exists: a note with the new name is already there"
+    )
