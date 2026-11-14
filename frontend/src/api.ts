@@ -4,6 +4,7 @@
 import type {
   AppSettings,
   CreateNote,
+  CreateTask,
   DeleteNote,
   GetResponses,
   HistoryEntry,
@@ -23,9 +24,12 @@ import type {
   SaveConflict,
   SaveNote,
   SearchResult,
+  SubtasksMade,
   TaskCard,
+  TaskCreated,
   TaskMoved,
   TaskSummary,
+  TaskVersion,
 } from './api-types'
 
 export const CSRF_HEADER = 'X-Onyx-Request'
@@ -180,6 +184,35 @@ export async function renameNote(path: string, name: string, version: string): P
 export async function deleteNote(path: string, version: string): Promise<NoteTrashed> {
   const request: DeleteNote = { path, version }
   const response = await apiFetch('/api/note/delete', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteTrashed
+}
+
+// --- Tasks: create, sub-tasks, rename, delete (#9 part (c)) ---------------------
+
+/** A new task in Tasks/, optionally a sub-task of `parent` (a task's path). */
+export async function createTask(task: CreateTask): Promise<TaskCreated> {
+  const response = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(task) })
+  return (await response.json()) as TaskCreated
+}
+
+/** One sub-task per unticked checklist line of the task. The task itself isn't changed. */
+export async function makeSubtasks(path: string, version: string): Promise<SubtasksMade> {
+  const request: TaskVersion = { path, version }
+  const response = await apiFetch('/api/task/subtasks', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as SubtasksMade
+}
+
+/** Rename a task in its folder. Refused for a task with sub-tasks. */
+export async function renameTask(path: string, name: string, version: string): Promise<NoteRenamed> {
+  const request: RenameNote = { path, name, version }
+  const response = await apiFetch('/api/task/rename', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteRenamed
+}
+
+/** Move a task to the vault's .trash folder. Refused for a task with sub-tasks. */
+export async function deleteTask(path: string, version: string): Promise<NoteTrashed> {
+  const request: TaskVersion = { path, version }
+  const response = await apiFetch('/api/task/delete', { method: 'POST', body: JSON.stringify(request) })
   return (await response.json()) as NoteTrashed
 }
 

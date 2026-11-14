@@ -8,6 +8,7 @@ import Markdown, { type ResolvedLinks } from './Markdown'
 import { RenameDelete } from './NoteActions'
 import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
+import { TaskTools } from './TaskActions'
 import TaskMove from './TaskMove'
 
 // Longer task bodies start folded to a short summary.
@@ -89,8 +90,9 @@ function FocusItem({ item, startIn }: { item: NoteDetail; startIn: Mode }) {
           {where && `${where} · `}
           {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
         </span>
-        {/* Notes only: tasks are renamed and deleted in Tasks (#9). */}
         {mode === 'read' && item.kind === 'note' && <RenameDelete item={item} />}
+        {/* Tasks: sub-tasks, rename and delete keep the parent/child rules (#9 part (c)). */}
+        {mode === 'read' && item.kind === 'task' && <TaskTools item={item} />}
         {/* Read while editing goes through the editor, which asks before dropping unsaved text. */}
         <ModeSwitch mode={mode} onChange={setMode} />
       </div>

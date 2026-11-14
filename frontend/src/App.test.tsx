@@ -1475,3 +1475,166 @@ describe('moving tasks', () => {
     expect(await screen.findByRole('button', { name: 'Move to In review →' })).toBeEnabled()
   })
 })
+
+describe('creating, renaming and deleting tasks (#9 part (c))', () => {
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+  const V = 'e'.repeat(64)
+  const SELF = card({ path: TASK.path, title: TASK.title, status: 'in-progress' })
+  const PARENT = card({ path: 'Tasks/Beta.md', title: 'Launch beta', status: 'in-progress', subtasks: { done: 0, total: 1 } })
+  const CHILD = card({ path: 'Tasks/Invite.md', title: 'Write invite text', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } })
+  const DONE = card({ path: 'Tasks/Old.md', title: 'Old job', status: 'done' })
+  const NEW: NoteDetail = { ...TASK, path: 'Tasks/Book venue.md', title: 'Book venue' }
+  function server(tasks: TaskCard[], writable = true, extra: Record<string, Reply> = {}) {
+    return fakeServer({
+      ...signedIn,
+      ...withHome,
+      'GET /api/tasks': { status: 200, body: { tasks } },
+      'GET /api/app-settings': { status: 200, body: { writable, identity: 'sheikh' } },
+      ...withNote(TASK),
+      ...withNote(NEW),
+      [`GET /api/note/source?path=${encodeURIComponent(TASK.path)}`]: { status: 200, body: { path: TASK.path, frontmatter: '', body: '', version: V, writable } },
+      ...extra,
+    })
+  }
+  const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 'POST' && c.path === path).map((c) => JSON.parse(c.body!))
+
+  it('"New task" on Tasks sends title, priority, due and parent, then opens the new task', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const calls = server([SELF, PARENT, CHILD, DONE], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'New task' }))
+    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue')
+    await userEvent.selectOptions(dialog.getByLabelText('Priority'), 'high')
+    fireEvent.change(dialog.getByLabelText('Due'), { target: { value: '2031-05-02' } })
+    const parents = dialog.getByLabelText('Sub-task of')
+    // Only tasks that can take sub-tasks: not a sub-task, not done.
+    expect(within(parents).getAllByRole('option').map((o) => o.textContent)).toEqual(['Nothing (a task of its own)', 'Launch beta', 'Plan weekly sync agenda'])
+    await userEvent.selectOptions(parents, 'Tasks/Beta.md')
+    await userEvent.click(dialog.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: 'high', due: '2031-05-02', parent: 'Tasks/Beta.md' }]))
+    expect(await screen.findByRole('heading', { name: 'Book venue', level: 1 })).toBeInTheDocument()
+  })
+
+  it('"New task" with only a title sends nulls for the rest', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const calls = server([SELF], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue{Enter}')
+    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: null, due: null, parent: null }]))
+  })
+
+  it('a refused name shows the reason and keeps the dialog open', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    server([SELF], true, { 'POST /api/tasks': { status: 409, body: { detail: 'x', reason: 'exists' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Title'), 'Taken{Enter}')
+    expect(await dialog.findByRole('alert')).toHaveTextContent('A note or task with that name is already there.')
+  })
+
+  it('with writes off, Create is off and says why', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const calls = server([SELF], false)
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue')
+    expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled()
+    expect(dialog.getByRole('status')).toHaveTextContent('Read-only')
+    expect(posts(calls, '/api/tasks')).toEqual([])
+  })
+
+  it('a task with sub-tasks can get more, but can’t be renamed or deleted (decision 5a)', async () => {
+    openFocus(TASK)
+    server([{ ...SELF, subtasks: { done: 0, total: 2 } }])
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'New sub-task' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Make sub-tasks…' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Rename' })).toHaveAttribute('title', expect.stringContaining('can’t be renamed'))
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+  })
+
+  it('a sub-task and a done task offer no sub-tasks of their own', async () => {
+    openFocus(TASK)
+    server([{ ...SELF, parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }])
+    const { unmount } = render(<App />)
+    expect(await screen.findByRole('button', { name: 'Rename' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'New sub-task' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Make sub-tasks…' })).toBeNull()
+    unmount()
+    openFocus(TASK)
+    server([{ ...SELF, status: 'done' }])
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Delete' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'New sub-task' })).toBeNull()
+  })
+
+  it('"New sub-task" in a task fixes the parent', async () => {
+    openFocus(TASK)
+    const calls = server([SELF], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'New sub-task' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'New sub-task' }))
+    expect(dialog.queryByLabelText('Sub-task of')).toBeNull()
+    expect(dialog.getByText(TASK.title)).toBeInTheDocument()
+    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue{Enter}')
+    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: null, due: null, parent: TASK.path }]))
+  })
+
+  it('"Make sub-tasks" quotes the version read when it opened, and reports what was made', async () => {
+    openFocus(TASK)
+    const calls = server([SELF], true, { 'POST /api/task/subtasks': { status: 201, body: { created: ['Tasks/A.md', 'Tasks/B.md'], skipped: ['Tasks/C.md'] } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Make sub-tasks…' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Make sub-tasks' }))
+    expect(posts(calls, '/api/task/subtasks')).toEqual([]) // nothing until confirmed
+    await userEvent.click(await dialog.findByRole('button', { name: 'Make sub-tasks' }))
+    await waitFor(() => expect(posts(calls, '/api/task/subtasks')).toEqual([{ path: TASK.path, version: V }]))
+    expect(await dialog.findByRole('status')).toHaveTextContent('Made 2 sub-tasks; 1 already there.')
+    expect(dialog.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
+
+  it('"Make sub-tasks" refused for one line says which line', async () => {
+    openFocus(TASK)
+    server([SELF], true, { 'POST /api/task/subtasks': { status: 400, body: { detail: 'Two checklist lines give the same task name.', line: 2 } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Make sub-tasks…' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(await dialog.findByRole('button', { name: 'Make sub-tasks' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Two checklist lines give the same task name. (Unticked line 2 of the checklist.)')
+  })
+
+  it('Rename sends the new name and opens the renamed task', async () => {
+    openFocus(TASK)
+    const calls = server([SELF], true, { 'POST /api/task/rename': { status: 200, body: { path: NEW.path } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Rename task' }))
+    const box = dialog.getByLabelText('New name')
+    expect(box).toHaveValue('a')
+    await userEvent.clear(box)
+    await userEvent.type(box, 'Book venue')
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Rename' })).toBeEnabled())
+    await userEvent.click(dialog.getByRole('button', { name: 'Rename' }))
+    await waitFor(() => expect(posts(calls, '/api/task/rename')).toEqual([{ path: TASK.path, name: 'Book venue', version: V }]))
+    expect(await screen.findByRole('heading', { name: 'Book venue', level: 1 })).toBeInTheDocument()
+  })
+
+  it('Delete asks first, then moves the task to the trash and goes to Tasks', async () => {
+    openFocus(TASK)
+    const calls = server([SELF], true, { 'POST /api/task/delete': { status: 200, body: { trashed_to: '.trash/Tasks/a.md' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Delete task' }))
+    expect(posts(calls, '/api/task/delete')).toEqual([])
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Move to trash' })).toBeEnabled())
+    await userEvent.click(dialog.getByRole('button', { name: 'Move to trash' }))
+    await waitFor(() => expect(posts(calls, '/api/task/delete')).toEqual([{ path: TASK.path, version: V }]))
+    expect(await screen.findByRole('heading', { name: 'Tasks', level: 1 })).toBeInTheDocument()
+  })
+})

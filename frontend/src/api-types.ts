@@ -5,6 +5,7 @@
 export interface ApiSchemas {
   AppSettings: AppSettings
   CreateNote: CreateNote
+  CreateTask: CreateTask
   DeleteNote: DeleteNote
   ErrorResponse: ErrorResponse
   HTTPValidationError: HTTPValidationError
@@ -26,6 +27,7 @@ export interface ApiSchemas {
   NoteSummary: NoteSummary
   NoteTrashed: NoteTrashed
   ParentRef: ParentRef
+  PartlyMade: PartlyMade
   RecentNote: RecentNote
   RenameNote: RenameNote
   SaveConflict: SaveConflict
@@ -36,13 +38,17 @@ export interface ApiSchemas {
   SnippetPart: SnippetPart
   StageCounts: StageCounts
   SubtaskCount: SubtaskCount
+  SubtasksMade: SubtasksMade
   TaskBoard: TaskBoard
   TaskCard: TaskCard
+  TaskCreated: TaskCreated
   TaskDetail: TaskDetail
   TaskHistoryEntry: TaskHistoryEntry
   TaskMoved: TaskMoved
   TaskRef: TaskRef
+  TaskRefusal: TaskRefusal
   TaskSummary: TaskSummary
+  TaskVersion: TaskVersion
   ValidationError: ValidationError
 }
 export interface AppSettings {
@@ -64,6 +70,18 @@ export interface CreateNote {
    * The note's name; .md is added
    */
   name: string
+}
+export interface CreateTask {
+  due?: string | null
+  /**
+   * A parent task's path
+   */
+  parent?: string | null
+  priority?: ('high' | 'normal' | 'low') | null
+  /**
+   * The task's name; .md is added
+   */
+  title: string
 }
 export interface DeleteNote {
   path: string
@@ -270,6 +288,13 @@ export interface ParentRef {
   path: string
   title: string
 }
+export interface PartlyMade {
+  /**
+   * The sub-tasks made before it stopped
+   */
+  created: string[]
+  detail: string
+}
 export interface RenameNote {
   /**
    * The new name, same folder
@@ -320,6 +345,16 @@ export interface SubtaskCount {
   done: number
   total: number
 }
+export interface SubtasksMade {
+  /**
+   * The new sub-tasks' paths
+   */
+  created: string[]
+  /**
+   * Lines whose sub-task was already there
+   */
+  skipped: string[]
+}
 export interface TaskBoard {
   tasks: TaskCard[]
 }
@@ -345,9 +380,27 @@ export interface TaskCard {
   subtasks: SubtaskCount | null
   title: string
 }
+export interface TaskCreated {
+  path: string
+  version: string
+}
 export interface TaskMoved {
   path: string
   status: 'open' | 'in-progress' | 'in-review' | 'done'
+  version: string
+}
+export interface TaskRefusal {
+  detail: string
+  /**
+   * The unticked checklist line (1 = first) it's about
+   */
+  line?: number | null
+}
+export interface TaskVersion {
+  path: string
+  /**
+   * The version that was opened
+   */
   version: string
 }
 

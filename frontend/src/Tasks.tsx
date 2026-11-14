@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { focusPath, getTasks, type Priority, type Stage, type TaskCard } from './api'
 import { PRIORITY_LABELS, shortDate, STAGE_LABELS } from './labels'
 import { PriorityPill, StagePill } from './StagePill'
+import { NewTask } from './TaskActions'
 import TaskMove from './TaskMove'
 import { columns, filterTasks, projectsOf, readFilter, tasksPath, type TasksFilter } from './tasksView'
 
@@ -154,7 +155,10 @@ export default function Tasks() {
         <span className="text-sm text-stone-500">
           {shown.length} of {tasks.data.length}
         </span>
-        <div role="group" aria-label="View" className="ml-auto inline-flex rounded-full border border-stone-300 p-0.5 text-sm dark:border-stone-700">
+        <div className="ml-auto">
+          <NewTask />
+        </div>
+        <div role="group" aria-label="View" className="inline-flex rounded-full border border-stone-300 p-0.5 text-sm dark:border-stone-700">
           {(['board', 'list'] as const).map((v) => (
             <button
               key={v}
