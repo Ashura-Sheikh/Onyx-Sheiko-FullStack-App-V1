@@ -4,6 +4,7 @@
 import type {
   AppSettings,
   CreateNote,
+  CreateTask,
   DeleteNote,
   GetResponses,
   HistoryEntry,
@@ -24,8 +25,13 @@ import type {
   SaveNote,
   SearchResult,
   TaskCard,
+  TaskChanged,
+  TaskCreated,
+  TaskDetails,
   TaskMoved,
   TaskSummary,
+  AddChecklistItem,
+  SetChecklistItem,
 } from './api-types'
 
 export const CSRF_HEADER = 'X-Onyx-Request'
@@ -180,6 +186,48 @@ export async function renameNote(path: string, name: string, version: string): P
 export async function deleteNote(path: string, version: string): Promise<NoteTrashed> {
   const request: DeleteNote = { path, version }
   const response = await apiFetch('/api/note/delete', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteTrashed
+}
+
+// --- Tasks: create, sub-tasks, details, rename, delete (#9 part (c)) -------------
+
+/** A new task in Tasks/. */
+export async function createTask(task: CreateTask): Promise<TaskCreated> {
+  const response = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(task) })
+  return (await response.json()) as TaskCreated
+}
+
+/** Add a sub-task: one unticked checklist line, after the task's last one. */
+export async function addChecklistItem(path: string, text: string, version: string): Promise<TaskChanged> {
+  const request: AddChecklistItem = { path, text, version }
+  const response = await apiFetch('/api/task/checklist/add', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as TaskChanged
+}
+
+/** Tick or untick the sub-task at `index` (0 = the first checklist line). */
+export async function setChecklistItem(path: string, index: number, done: boolean, version: string): Promise<TaskChanged> {
+  const request: SetChecklistItem = { path, index, done, version }
+  const response = await apiFetch('/api/task/checklist/set', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as TaskChanged
+}
+
+/** Priority, due date, projects, tags and description. Only fields that change are written. */
+export async function editTaskDetails(details: TaskDetails): Promise<TaskChanged> {
+  const response = await apiFetch('/api/task/details', { method: 'POST', body: JSON.stringify(details) })
+  return (await response.json()) as TaskChanged
+}
+
+/** Rename a task in its folder. */
+export async function renameTask(path: string, name: string, version: string): Promise<NoteRenamed> {
+  const request: RenameNote = { path, name, version }
+  const response = await apiFetch('/api/task/rename', { method: 'POST', body: JSON.stringify(request) })
+  return (await response.json()) as NoteRenamed
+}
+
+/** Move a task to the vault's .trash folder. */
+export async function deleteTask(path: string, version: string): Promise<NoteTrashed> {
+  const request: DeleteNote = { path, version }
+  const response = await apiFetch('/api/task/delete', { method: 'POST', body: JSON.stringify(request) })
   return (await response.json()) as NoteTrashed
 }
 

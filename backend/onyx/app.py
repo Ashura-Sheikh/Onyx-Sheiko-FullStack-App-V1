@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from onyx import config, editing, models, summary, tasks
+from onyx import config, editing, models, summary, task_writes, tasks
 from onyx.auth import SESSION_COOKIE, AuthState
 from onyx.cache import NoteCache, default_cache_dir
 from onyx.config import Settings
@@ -61,6 +61,37 @@ class DeleteNote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str = Field(min_length=1, max_length=512)
     version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+class CreateTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=255, description="The task's name; .md is added")
+    priority: Literal["high", "normal", "low"] | None = None
+    due: date | None = None
+    description: str = Field(default="", max_length=20_000)
+
+
+class TaskVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1, max_length=512)
+    version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+class AddChecklistItem(TaskVersion):
+    text: str = Field(min_length=1, max_length=300)
+
+
+class SetChecklistItem(TaskVersion):
+    index: int = Field(ge=0, le=10_000, description="Which checklist line, 0 = the first")
+    done: bool
+
+
+class TaskDetails(TaskVersion):
+    priority: Literal["high", "normal", "low"] | None
+    due: date | None
+    projects: list[str] = Field(max_length=50)
+    tags: list[str] = Field(max_length=50)
+    description: str = Field(max_length=20_000)
 
 
 def now() -> datetime:
@@ -330,6 +361,113 @@ def create_app(settings: Settings) -> FastAPI:
         except (NoteNotFound, VersionConflict) as error:
             return refused(error)
         return {"path": moved.path, "version": moved.version, "status": body.to}
+
+    # Part (c) of #9: create, sub-tasks (checklist lines), details, rename, delete
+    # (onyx/task_writes.py).
+    def task_write(action):
+        if not settings.allow_writes:
+            return writes_off()
+        try:
+            return action()
+        except task_writes.TaskRefused as error:
+            detail = task_writes.TASK_REFUSALS.get(error.code, "That isn't allowed for this task.")
+            return JSONResponse({"detail": detail}, status_code=400)
+        except write_errors as error:
+            return refused(error)
+
+    task_responses = {
+        400: {"model": models.TaskRefusal, "description": "Refused"},
+        403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+        404: {"model": models.ErrorResponse, "description": "No such task"},
+        409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},
+    }
+
+    @app.post(
+        "/api/tasks",
+        status_code=201,
+        response_model=models.TaskCreated,
+        responses={
+            **task_responses,
+            409: {"model": models.MoveRefused, "description": "Name taken"},
+        },
+    )
+    def create_task(body: CreateTask) -> dict:
+        def action() -> dict:
+            created = task_writes.create_task(
+                vault, body.title, clock(), body.priority, body.due, body.description
+            )
+            return {"path": created.path, "version": created.version}
+
+        return task_write(action)
+
+    def changed(note) -> dict:
+        return {"path": note.path, "version": note.version}
+
+    @app.post(
+        "/api/task/checklist/add", response_model=models.TaskChanged, responses=task_responses
+    )
+    def add_checklist_item(body: AddChecklistItem) -> dict:
+        return task_write(
+            lambda: changed(task_writes.add_item(vault, body.path, body.text, body.version))
+        )
+
+    @app.post(
+        "/api/task/checklist/set", response_model=models.TaskChanged, responses=task_responses
+    )
+    def set_checklist_item(body: SetChecklistItem) -> dict:
+        return task_write(
+            lambda: changed(
+                task_writes.set_item(vault, body.path, body.index, body.done, body.version)
+            )
+        )
+
+    @app.post("/api/task/details", response_model=models.TaskChanged, responses=task_responses)
+    def edit_task_details(body: TaskDetails) -> dict:
+        return task_write(
+            lambda: changed(
+                task_writes.edit_details(
+                    vault,
+                    body.path,
+                    body.version,
+                    clock(),
+                    body.priority,
+                    body.due,
+                    body.projects,
+                    body.tags,
+                    body.description,
+                )
+            )
+        )
+
+    @app.post(
+        "/api/task/rename",
+        response_model=models.NoteRenamed,
+        responses={
+            400: {"model": models.TaskRefusal, "description": "Name not allowed, or a note"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such task"},
+            409: {"model": models.MoveRefused, "description": "Changed on disk, or name taken"},
+        },
+    )
+    def rename_task(body: RenameNote) -> dict:
+        return task_write(
+            lambda: {"path": task_writes.rename_task(vault, body.path, body.name, body.version)}
+        )
+
+    @app.post(
+        "/api/task/delete",
+        response_model=models.NoteTrashed,
+        responses={
+            400: {"model": models.TaskRefusal, "description": "A note, not a task"},
+            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+            404: {"model": models.ErrorResponse, "description": "No such task"},
+            409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},
+        },
+    )
+    def delete_task(body: TaskVersion) -> dict:
+        return task_write(
+            lambda: {"trashed_to": task_writes.delete_task(vault, body.path, body.version, now())}
+        )
 
     @app.get("/api/health", response_model=models.Health)
     def health() -> dict[str, str]:

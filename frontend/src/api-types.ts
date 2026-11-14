@@ -3,8 +3,11 @@
 // backend/ and `npm run gen:api` here. A test fails if this file is out of date.
 
 export interface ApiSchemas {
+  AddChecklistItem: AddChecklistItem
   AppSettings: AppSettings
+  ChecklistItem: ChecklistItem
   CreateNote: CreateNote
+  CreateTask: CreateTask
   DeleteNote: DeleteNote
   ErrorResponse: ErrorResponse
   HTTPValidationError: HTTPValidationError
@@ -25,7 +28,6 @@ export interface ApiSchemas {
   NoteSource: NoteSource
   NoteSummary: NoteSummary
   NoteTrashed: NoteTrashed
-  ParentRef: ParentRef
   RecentNote: RecentNote
   RenameNote: RenameNote
   SaveConflict: SaveConflict
@@ -33,17 +35,30 @@ export interface ApiSchemas {
   SearchResult: SearchResult
   SearchResults: SearchResults
   SessionStatus: SessionStatus
+  SetChecklistItem: SetChecklistItem
   SnippetPart: SnippetPart
   StageCounts: StageCounts
-  SubtaskCount: SubtaskCount
   TaskBoard: TaskBoard
   TaskCard: TaskCard
+  TaskChanged: TaskChanged
+  TaskCreated: TaskCreated
   TaskDetail: TaskDetail
+  TaskDetails: TaskDetails
   TaskHistoryEntry: TaskHistoryEntry
   TaskMoved: TaskMoved
   TaskRef: TaskRef
+  TaskRefusal: TaskRefusal
   TaskSummary: TaskSummary
+  TaskVersion: TaskVersion
   ValidationError: ValidationError
+}
+export interface AddChecklistItem {
+  path: string
+  text: string
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface AppSettings {
   /**
@@ -55,6 +70,10 @@ export interface AppSettings {
    */
   writable: boolean
 }
+export interface ChecklistItem {
+  done: boolean
+  text: string
+}
 export interface CreateNote {
   /**
    * An existing folder; "" is the top level
@@ -64,6 +83,15 @@ export interface CreateNote {
    * The note's name; .md is added
    */
   name: string
+}
+export interface CreateTask {
+  description?: string
+  due?: string | null
+  priority?: ('high' | 'normal' | 'low') | null
+  /**
+   * The task's name; .md is added
+   */
+  title: string
 }
 export interface DeleteNote {
   path: string
@@ -196,9 +224,17 @@ export interface TaskRef {
   title: string
 }
 export interface TaskDetail {
+  /**
+   * Sub-tasks: the task's checklist lines
+   */
+  checklist: ChecklistItem[]
   closed_by: string | null
   completed: string | null
   created: string | null
+  /**
+   * The text at the top of the task, without its checklist
+   */
+  description: string
   /**
    * YYYY-MM-DD
    */
@@ -266,10 +302,6 @@ export interface NoteTrashed {
    */
   trashed_to: string
 }
-export interface ParentRef {
-  path: string
-  title: string
-}
 export interface RenameNote {
   /**
    * The new name, same folder
@@ -316,38 +348,82 @@ export interface SearchResults {
 export interface SessionStatus {
   authenticated: boolean
 }
-export interface SubtaskCount {
-  done: number
-  total: number
+export interface SetChecklistItem {
+  done: boolean
+  /**
+   * Which checklist line, 0 = the first
+   */
+  index: number
+  path: string
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface TaskBoard {
   tasks: TaskCard[]
 }
 export interface TaskCard {
   /**
+   * Sub-tasks: the task's checklist lines
+   */
+  checklist: ChecklistItem[]
+  /**
+   * The description's first line
+   */
+  description: string | null
+  /**
    * YYYY-MM-DD
    */
   due: string | null
-  /**
-   * The parent task, for a task tagged subtask
-   */
-  parent: ParentRef | null
   path: string
   priority: ('high' | 'normal' | 'low') | null
   /**
-   * Project links (not the parent), as written
+   * Project links to notes, as written
    */
   projects: string[]
   status: ('open' | 'in-progress' | 'in-review' | 'done') | null
-  /**
-   * Sub-task progress, for a parent task
-   */
-  subtasks: SubtaskCount | null
   title: string
+}
+export interface TaskChanged {
+  path: string
+  version: string
+}
+export interface TaskCreated {
+  path: string
+  version: string
+}
+export interface TaskDetails {
+  description: string
+  due: string | null
+  path: string
+  priority: ('high' | 'normal' | 'low') | null
+  /**
+   * @maxItems 50
+   */
+  projects: string[]
+  /**
+   * @maxItems 50
+   */
+  tags: string[]
+  /**
+   * The version that was opened
+   */
+  version: string
 }
 export interface TaskMoved {
   path: string
   status: 'open' | 'in-progress' | 'in-review' | 'done'
+  version: string
+}
+export interface TaskRefusal {
+  detail: string
+}
+export interface TaskVersion {
+  path: string
+  /**
+   * The version that was opened
+   */
   version: string
 }
 

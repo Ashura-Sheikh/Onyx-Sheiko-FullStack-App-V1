@@ -213,7 +213,8 @@ def test_done_needs_the_history_to_end_with_the_move_into_review(api, vault):
     assert (vault / REVIEW).read_text() == text
 
 
-def test_a_parent_with_open_sub_tasks_cant_be_done(api, vault):
+def test_a_task_with_unticked_sub_tasks_cant_be_done(api, vault):
+    """Sub-tasks are the task's checklist lines (Sheikh's decision on #40)."""
     client, headers = api
     text = (
         (vault / PARENT)
@@ -227,13 +228,14 @@ def test_a_parent_with_open_sub_tasks_cant_be_done(api, vault):
     (vault / PARENT).write_text(text)
     response = move(client, headers, PARENT, "done", version(vault, PARENT))
     assert response.status_code == 400
-    assert response.json()["detail"] == "This task has sub-tasks that aren't done yet."
+    assert response.json()["detail"] == "This task has sub-tasks that aren't ticked yet."
     assert (vault / PARENT).read_text() == text
 
-    # Once the open sub-task is done, the parent can close.
-    child = "Tasks/Set up beta feedback form.md"
-    for to in ["in-progress", "in-review", "done"]:
-        assert move(client, headers, child, to, version(vault, child)).status_code == 200
+    # A checklist line in a code block or in Context doesn't count.
+    (vault / PARENT).write_text(
+        text.replace("- [ ] Book a demo slot", "- [x] Book a demo slot")
+        + "\n## Context\n\n- [ ] not a sub-task\n"
+    )
     assert move(client, headers, PARENT, "done", version(vault, PARENT)).status_code == 200
 
 

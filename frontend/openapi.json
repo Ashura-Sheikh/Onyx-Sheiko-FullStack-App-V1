@@ -1,6 +1,36 @@
 {
   "components": {
     "schemas": {
+      "AddChecklistItem": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version",
+          "text"
+        ],
+        "title": "AddChecklistItem",
+        "type": "object"
+      },
       "AppSettings": {
         "additionalProperties": false,
         "properties": {
@@ -29,6 +59,25 @@
         "title": "AppSettings",
         "type": "object"
       },
+      "ChecklistItem": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "done"
+        ],
+        "title": "ChecklistItem",
+        "type": "object"
+      },
       "CreateNote": {
         "additionalProperties": false,
         "properties": {
@@ -51,6 +100,57 @@
           "name"
         ],
         "title": "CreateNote",
+        "type": "object"
+      },
+      "CreateTask": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Description",
+            "type": "string"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "normal",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "title": {
+            "description": "The task's name; .md is added",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "CreateTask",
         "type": "object"
       },
       "DeleteNote": {
@@ -615,25 +715,6 @@
         "title": "NoteTrashed",
         "type": "object"
       },
-      "ParentRef": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "title"
-        ],
-        "title": "ParentRef",
-        "type": "object"
-      },
       "RecentNote": {
         "additionalProperties": false,
         "properties": {
@@ -824,6 +905,42 @@
         "title": "SessionStatus",
         "type": "object"
       },
+      "SetChecklistItem": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "index": {
+            "description": "Which checklist line, 0 = the first",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version",
+          "index",
+          "done"
+        ],
+        "title": "SetChecklistItem",
+        "type": "object"
+      },
       "SnippetPart": {
         "additionalProperties": false,
         "properties": {
@@ -872,25 +989,6 @@
         "title": "StageCounts",
         "type": "object"
       },
-      "SubtaskCount": {
-        "additionalProperties": false,
-        "properties": {
-          "done": {
-            "title": "Done",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "done",
-          "total"
-        ],
-        "title": "SubtaskCount",
-        "type": "object"
-      },
       "TaskBoard": {
         "additionalProperties": false,
         "properties": {
@@ -911,6 +1009,26 @@
       "TaskCard": {
         "additionalProperties": false,
         "properties": {
+          "checklist": {
+            "description": "Sub-tasks: the task's checklist lines",
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItem"
+            },
+            "title": "Checklist",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The description's first line",
+            "title": "Description"
+          },
           "due": {
             "anyOf": [
               {
@@ -922,17 +1040,6 @@
             ],
             "description": "YYYY-MM-DD",
             "title": "Due"
-          },
-          "parent": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ParentRef"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The parent task, for a task tagged subtask"
           },
           "path": {
             "title": "Path",
@@ -955,7 +1062,7 @@
             "title": "Priority"
           },
           "projects": {
-            "description": "Project links (not the parent), as written",
+            "description": "Project links to notes, as written",
             "items": {
               "type": "string"
             },
@@ -979,17 +1086,6 @@
             ],
             "title": "Status"
           },
-          "subtasks": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SubtaskCount"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Sub-task progress, for a parent task"
-          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1002,15 +1098,61 @@
           "priority",
           "due",
           "projects",
-          "parent",
-          "subtasks"
+          "description",
+          "checklist"
         ],
         "title": "TaskCard",
+        "type": "object"
+      },
+      "TaskChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "TaskChanged",
+        "type": "object"
+      },
+      "TaskCreated": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "TaskCreated",
         "type": "object"
       },
       "TaskDetail": {
         "additionalProperties": false,
         "properties": {
+          "checklist": {
+            "description": "Sub-tasks: the task's checklist lines",
+            "items": {
+              "$ref": "#/components/schemas/ChecklistItem"
+            },
+            "title": "Checklist",
+            "type": "array"
+          },
           "closed_by": {
             "anyOf": [
               {
@@ -1043,6 +1185,11 @@
               }
             ],
             "title": "Created"
+          },
+          "description": {
+            "description": "The text at the top of the task, without its checklist",
+            "title": "Description",
+            "type": "string"
           },
           "due": {
             "anyOf": [
@@ -1124,9 +1271,88 @@
           "completed",
           "closed_by",
           "time_to_close_minutes",
+          "description",
+          "checklist",
           "history"
         ],
         "title": "TaskDetail",
+        "type": "object"
+      },
+      "TaskDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 20000,
+            "title": "Description",
+            "type": "string"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "normal",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "projects": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Projects",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Tags",
+            "type": "array"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version",
+          "priority",
+          "due",
+          "projects",
+          "tags",
+          "description"
+        ],
+        "title": "TaskDetails",
         "type": "object"
       },
       "TaskHistoryEntry": {
@@ -1239,6 +1465,20 @@
         "title": "TaskRef",
         "type": "object"
       },
+      "TaskRefusal": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "TaskRefusal",
+        "type": "object"
+      },
       "TaskSummary": {
         "additionalProperties": false,
         "properties": {
@@ -1304,6 +1544,29 @@
           "due"
         ],
         "title": "TaskSummary",
+        "type": "object"
+      },
+      "TaskVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version"
+        ],
+        "title": "TaskVersion",
         "type": "object"
       },
       "ValidationError": {
@@ -1951,6 +2214,318 @@
         "summary": "Sign In"
       }
     },
+    "/api/task/checklist/add": {
+      "post": {
+        "operationId": "add_checklist_item_api_task_checklist_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChecklistItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "Refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Checklist Item"
+      }
+    },
+    "/api/task/checklist/set": {
+      "post": {
+        "operationId": "set_checklist_item_api_task_checklist_set_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChecklistItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "Refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Checklist Item"
+      }
+    },
+    "/api/task/delete": {
+      "post": {
+        "operationId": "delete_task_api_task_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteTrashed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "A note, not a task"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Task"
+      }
+    },
+    "/api/task/details": {
+      "post": {
+        "operationId": "edit_task_details_api_task_details_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDetails"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "Refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Task Details"
+      }
+    },
     "/api/task/move": {
       "post": {
         "operationId": "move_task_api_task_move_post",
@@ -2029,6 +2604,84 @@
         "summary": "Move Task"
       }
     },
+    "/api/task/rename": {
+      "post": {
+        "operationId": "rename_task_api_task_rename_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteRenamed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "Name not allowed, or a note"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk, or name taken"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Task"
+      }
+    },
     "/api/tasks": {
       "get": {
         "operationId": "task_list_api_tasks_get",
@@ -2045,6 +2698,82 @@
           }
         },
         "summary": "Task List"
+      },
+      "post": {
+        "operationId": "create_task_api_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRefusal"
+                }
+              }
+            },
+            "description": "Refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Name taken"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Task"
       }
     }
   }

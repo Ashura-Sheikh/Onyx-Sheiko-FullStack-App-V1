@@ -9,12 +9,12 @@ import { useNavigate } from 'react-router'
 import { createNote, deleteNote, focusPath, getNote, getNoteSource, notesPath, renameNote, type NoteDetail } from './api'
 import { nameOf, writeProblem } from './noteWrites'
 
-const BUTTON = 'rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-900'
-const PRIMARY =
+export const BUTTON = 'rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-900'
+export const PRIMARY =
   'rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50'
-const DANGER =
+export const DANGER =
   'rounded-lg bg-rose-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50'
-const INPUT =
+export const INPUT =
   'w-full rounded-lg border border-stone-300 bg-transparent px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-stone-700'
 
 /** Everything that lists or shows notes reads them again. */
@@ -23,7 +23,7 @@ async function refreshNotes(queryClient: QueryClient, gone?: string) {
   await Promise.all([['notes'], ['home'], ['items'], ['search']].map((queryKey) => queryClient.invalidateQueries({ queryKey })))
 }
 
-function Shell({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode }) {
+export function Shell({ open, onOpenChange, title, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -37,7 +37,7 @@ function Shell({ open, onOpenChange, title, children }: { open: boolean; onOpenC
   )
 }
 
-function Problem({ text }: { text: string | null }) {
+export function Problem({ text }: { text: string | null }) {
   if (!text) return null
   return (
     <p role="alert" className="mb-3 rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-900 dark:bg-rose-950 dark:text-rose-200">
@@ -125,7 +125,7 @@ function LinkWarning({ linking, what }: { linking: number; what: 'rename' | 'del
   )
 }
 
-const READ_ONLY = 'Read-only: the server was started without --allow-writes, so nothing can be changed.'
+export const READ_ONLY = 'Read-only: the server was started without --allow-writes, so nothing can be changed.'
 
 /** Rename and Delete in a note's view. Not shown for tasks. */
 export function RenameDelete({ item }: { item: NoteDetail }) {

@@ -8,6 +8,8 @@ import Markdown, { type ResolvedLinks } from './Markdown'
 import { RenameDelete } from './NoteActions'
 import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
+import { TaskChecklist } from './Checklist'
+import { TaskTools } from './TaskActions'
 import TaskMove from './TaskMove'
 
 // Longer task bodies start folded to a short summary.
@@ -18,9 +20,9 @@ function TaskSummary({ body, links }: { body: string; links: ResolvedLinks }) {
   if (body.trim() === '') return <p className="text-stone-500">No description.</p>
   const long = body.length > SUMMARY_CHARS
   return (
-    <section aria-labelledby="summary-heading">
+    <section aria-labelledby="summary-heading" className="mb-8">
       <h2 id="summary-heading" className="mb-1 text-sm font-medium tracking-wide text-stone-500 uppercase">
-        Summary
+        Description
       </h2>
       <div
         data-testid="summary-body"
@@ -89,8 +91,9 @@ function FocusItem({ item, startIn }: { item: NoteDetail; startIn: Mode }) {
           {where && `${where} · `}
           {task?.due ? `due ${shortDate(task.due)}` : `updated ${dateTime(item.updated)}`}
         </span>
-        {/* Notes only: tasks are renamed and deleted in Tasks (#9). */}
         {mode === 'read' && item.kind === 'note' && <RenameDelete item={item} />}
+        {/* Tasks: Edit details, Rename, Delete (#9 part (c)). */}
+        {mode === 'read' && item.kind === 'task' && <TaskTools item={item} />}
         {/* Read while editing goes through the editor, which asks before dropping unsaved text. */}
         <ModeSwitch mode={mode} onChange={setMode} />
       </div>
@@ -105,6 +108,7 @@ function FocusItem({ item, startIn }: { item: NoteDetail; startIn: Mode }) {
             <TaskMove task={{ path: item.path, title: item.title, status: task.status }} />
           </div>
           <TaskSummary body={item.body} links={item.links} />
+          <TaskChecklist path={item.path} status={task.status} items={task.checklist} />
         </>
       ) : (
         <div className="font-serif text-lg leading-8">
