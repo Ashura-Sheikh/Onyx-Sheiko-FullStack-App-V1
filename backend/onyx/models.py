@@ -228,3 +228,25 @@ class TaskMoved(Model):
     path: str
     version: str
     status: Stage
+
+
+class TaskCreated(Model):
+    path: str
+    version: str
+
+
+class SubtasksMade(Model):
+    created: list[str] = Field(description="The new sub-tasks' paths")
+    skipped: list[str] = Field(description="Lines whose sub-task was already there")
+
+
+class TaskRefusal(Model):
+    detail: str
+    line: int | None = Field(
+        default=None, description="The unticked checklist line (1 = first) it's about"
+    )
+
+
+class PartlyMade(Model):
+    detail: str
+    created: list[str] = Field(description="The sub-tasks made before it stopped")
