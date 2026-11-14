@@ -68,6 +68,8 @@ const TASK: NoteDetail = {
     completed: null,
     closed_by: null,
     time_to_close_minutes: null,
+    description: 'Short description of the task.',
+    checklist: [],
     history: [
       { at: '2031-04-13T11:00:00+00:00', from: 'created', to: 'open', remark: null },
       { at: '2031-04-13T12:00:00+00:00', from: 'open', to: 'in-progress', remark: null },
@@ -403,7 +405,7 @@ describe('focus view', () => {
     const main = within(screen.getByRole('main'))
     expect(main.getByText('In progress')).toBeInTheDocument()
     expect(main.getByText('High priority')).toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'Summary' })).getByText('Short description of the task.')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Description' })).getByText('Short description of the task.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
   })
 
@@ -1135,15 +1137,7 @@ describe('create, rename and delete notes', () => {
     expect(calls.filter((c) => c.method === 'POST')).toEqual([])
   })
 
-  it('a task has no Rename or Delete here, and nor does a note being edited', async () => {
-    openFocus(TASK)
-    server({ ...withNote(TASK) })
-    const { unmount } = render(<App />)
-    expect(await screen.findByRole('heading', { name: TASK.title })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
-    unmount()
-
+  it('a note being edited has no Rename or Delete (tasks have their own, in #9 part (c))', async () => {
     openFocus(NOTE)
     server()
     render(<App />)
@@ -1252,16 +1246,33 @@ describe('changes while editing', () => {
 })
 
 describe('tasks board and list', () => {
-  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], description: null, checklist: [], ...over })
   const TASKS: TaskCard[] = [
     card({ path: 'Tasks/Pick.md', title: 'Pick a layout', status: 'open', priority: 'high', due: '2031-04-16', projects: ['Atlas kickoff'] }),
-    card({ path: 'Tasks/Form.md', title: 'Set up feedback form', status: 'open', priority: 'normal', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }),
-    card({ path: 'Tasks/Beta.md', title: 'Launch beta', status: 'in-progress', priority: 'high', due: '2031-04-30', projects: ['Atlas kickoff'], subtasks: { done: 1, total: 2 } }),
+    card({ path: 'Tasks/Form.md', title: 'Set up feedback form', status: 'open', priority: 'normal' }),
+    card({
+      path: 'Tasks/Beta.md',
+      title: 'Launch beta',
+      status: 'in-progress',
+      priority: 'high',
+      due: '2031-04-30',
+      projects: ['Atlas kickoff'],
+      description: 'Get the beta out to the first readers.',
+      checklist: [
+        { text: 'Write the invite', done: true },
+        { text: 'Book a demo slot', done: false },
+      ],
+    }),
     card({ path: 'Tasks/Rev.md', title: 'Review cache design', status: 'in-review', priority: 'low', projects: ['Atlas architecture'] }),
-    card({ path: 'Tasks/Invite.md', title: 'Write invite text', status: 'done', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }),
+    card({ path: 'Tasks/Invite.md', title: 'Write invite text', status: 'done' }),
   ]
   const withTasks = (tasks: TaskCard[] = TASKS) => ({ 'GET /api/tasks': { status: 200, body: { tasks } }, 'GET /api/app-settings': { status: 200, body: { writable: false, identity: null } } })
-  const titles = (region: HTMLElement) => within(region).queryAllByRole('listitem').map((li) => within(li).getAllByRole('link').at(-1)!.textContent)
+  // Card items only (a card's sub-tasks are list items too, without a link).
+  const titles = (region: HTMLElement) =>
+    within(region)
+      .queryAllByRole('listitem')
+      .filter((li) => within(li).queryAllByRole('link').length > 0)
+      .map((li) => within(li).getAllByRole('link').at(-1)!.textContent)
 
   it('is in the navigation and shows the board by stage, by default', async () => {
     fakeServer({ ...signedIn, ...withHome, ...withTasks() })
@@ -1277,7 +1288,7 @@ describe('tasks board and list', () => {
     expect(screen.getByText('5 of 5')).toBeInTheDocument()
   })
 
-  it('a card shows priority, due date, projects, its parent and sub-task progress, and opens the task', async () => {
+  it('a card shows priority, due date, projects, its description and its sub-tasks, and opens the task', async () => {
     window.history.replaceState(null, '', '/tasks')
     fakeServer({ ...signedIn, ...withHome, ...withTasks(), ...withNote(TASK) })
     render(<App />)
@@ -1285,11 +1296,14 @@ describe('tasks board and list', () => {
     expect(doing.getByText('High priority')).toBeInTheDocument()
     expect(doing.getByText('due 30 Apr')).toBeInTheDocument()
     expect(doing.getByText('Atlas kickoff')).toBeInTheDocument()
-    expect(doing.getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
-    expect(doing.getByText('1/2 sub-tasks', { exact: false })).toBeInTheDocument()
+    expect(doing.getByText('Get the beta out to the first readers.')).toBeInTheDocument()
+    // The sub-tasks are inside the card, with tick boxes.
+    const subtasks = within(doing.getByRole('group', { name: 'Sub-tasks' }))
+    expect(subtasks.getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
+    expect(subtasks.getByRole('checkbox', { name: 'Write the invite' })).toBeChecked()
+    expect(subtasks.getByRole('checkbox', { name: 'Book a demo slot' })).not.toBeChecked()
     const open = within(screen.getByRole('region', { name: 'Open' }))
-    expect(open.getByText(/Sub-task of/)).toBeInTheDocument()
-    expect(open.getByRole('link', { name: 'Launch beta' })).toHaveAttribute('href', '/focus?path=Tasks%2FBeta.md')
+    expect(open.queryByRole('group', { name: 'Sub-tasks' })).toBeNull()
     expect(open.getByRole('link', { name: 'Pick a layout' })).toHaveAttribute('href', '/focus?path=Tasks%2FPick.md')
   })
 
@@ -1299,11 +1313,10 @@ describe('tasks board and list', () => {
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'List' }))
     const rows = within(await screen.findByRole('table')).getAllByRole('row').slice(1)
-    // Each row's own link is the last one in its first cell (a sub-task's parent link comes first).
-    const own = rows.map((r) => within(within(r).getAllByRole('cell')[0]).getAllByRole('link').at(-1)!.textContent)
+    const own = rows.map((r) => within(within(r).getAllByRole('cell')[0]).getByRole('link').textContent)
     expect(own).toEqual(['Pick a layout', 'Set up feedback form', 'Launch beta', 'Review cache design', 'Write invite text'])
-    expect(within(rows[1]).getByText(/Sub-task of/)).toBeInTheDocument()
-    expect(within(rows[2]).getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Get the beta out to the first readers.')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('1/2 sub-tasks')).toBeInTheDocument()
     expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Pick a layout', 'Open', 'High priority', '16 Apr', 'Atlas kickoff', 'Move to In progress →Read-only: the server was started without --allow-writes.'])
     expect(window.location.search).toBe('?view=list')
   })
@@ -1352,19 +1365,18 @@ describe('tasks board and list', () => {
   it('shows task titles and projects as text, never as HTML', async () => {
     window.history.replaceState(null, '', '/tasks')
     const hostile = '<img src=x onerror=alert(1)>'
-    fakeServer({ ...signedIn, ...withHome, ...withTasks([card({ title: hostile, projects: [hostile], parent: { path: 'p.md', title: hostile } })]) })
+    fakeServer({ ...signedIn, ...withHome, ...withTasks([card({ title: hostile, projects: [hostile], description: hostile, checklist: [{ text: hostile, done: false }] })]) })
     render(<App />)
     const open = within(await screen.findByRole('region', { name: 'Open' }))
-    // The parent link and the title link, both with the hostile text as their name.
-    expect(open.getAllByRole('link', { name: hostile }).map((a) => a.getAttribute('href'))).toEqual(['/focus?path=p.md', '/focus?path=Tasks%2Fx.md'])
-    expect(open.getAllByText(hostile)).toHaveLength(3) // title, parent link, project
+    expect(open.getAllByRole('link', { name: hostile }).map((a) => a.getAttribute('href'))).toEqual(['/focus?path=Tasks%2Fx.md'])
+    expect(open.getAllByText(hostile)).toHaveLength(4) // title, description, project, sub-task
     expect(within(screen.getByLabelText('Project')).getByRole('option', { name: hostile })).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
   })
 })
 
 describe('moving tasks', () => {
-  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], description: null, checklist: [], ...over })
   const OPEN_TASK = card({ path: 'Tasks/Open.md', title: 'Tidy folder', status: 'open' })
   const REVIEW_TASK = card({ path: 'Tasks/Rev.md', title: 'Update checklist', status: 'in-review' })
   const DONE_TASK = card({ path: 'Tasks/Done.md', title: 'Old job', status: 'done' })
@@ -1476,59 +1488,58 @@ describe('moving tasks', () => {
   })
 })
 
-describe('creating, renaming and deleting tasks (#9 part (c))', () => {
-  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+describe('tasks: create, sub-tasks, details, rename, delete (#9 part (c))', () => {
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], description: null, checklist: [], ...over })
   const V = 'e'.repeat(64)
-  const SELF = card({ path: TASK.path, title: TASK.title, status: 'in-progress' })
-  const PARENT = card({ path: 'Tasks/Beta.md', title: 'Launch beta', status: 'in-progress', subtasks: { done: 0, total: 1 } })
-  const CHILD = card({ path: 'Tasks/Invite.md', title: 'Write invite text', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } })
-  const DONE = card({ path: 'Tasks/Old.md', title: 'Old job', status: 'done' })
+  const ITEMS = [
+    { text: 'Write the invite', done: true },
+    { text: 'Book a demo slot', done: false },
+  ]
+  const WITH_ITEMS: NoteDetail = { ...TASK, task: { ...TASK.task!, checklist: ITEMS } }
   const NEW: NoteDetail = { ...TASK, path: 'Tasks/Book venue.md', title: 'Book venue' }
-  function server(tasks: TaskCard[], writable = true, extra: Record<string, Reply> = {}) {
+  function server(note: NoteDetail = WITH_ITEMS, writable = true, extra: Record<string, Reply> = {}, tasks: TaskCard[] = [card({ path: TASK.path, title: TASK.title, status: 'in-progress', checklist: ITEMS })]) {
     return fakeServer({
       ...signedIn,
       ...withHome,
       'GET /api/tasks': { status: 200, body: { tasks } },
       'GET /api/app-settings': { status: 200, body: { writable, identity: 'sheikh' } },
-      ...withNote(TASK),
+      ...withNote(note),
       ...withNote(NEW),
       [`GET /api/note/source?path=${encodeURIComponent(TASK.path)}`]: { status: 200, body: { path: TASK.path, frontmatter: '', body: '', version: V, writable } },
       ...extra,
     })
   }
   const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 'POST' && c.path === path).map((c) => JSON.parse(c.body!))
+  const changed = { status: 200, body: { path: TASK.path, version: 'f'.repeat(64) } }
 
-  it('"New task" on Tasks sends title, priority, due and parent, then opens the new task', async () => {
+  it('"New task" sends title, priority, due and description, then opens the new task', async () => {
     window.history.replaceState(null, '', '/tasks')
-    const calls = server([SELF, PARENT, CHILD, DONE], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+    const calls = server(WITH_ITEMS, true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'New task' }))
+    expect(dialog.queryByLabelText('Sub-task of')).toBeNull()
     await userEvent.type(dialog.getByLabelText('Title'), 'Book venue')
     await userEvent.selectOptions(dialog.getByLabelText('Priority'), 'high')
     fireEvent.change(dialog.getByLabelText('Due'), { target: { value: '2031-05-02' } })
-    const parents = dialog.getByLabelText('Sub-task of')
-    // Only tasks that can take sub-tasks: not a sub-task, not done.
-    expect(within(parents).getAllByRole('option').map((o) => o.textContent)).toEqual(['Nothing (a task of its own)', 'Launch beta', 'Plan weekly sync agenda'])
-    await userEvent.selectOptions(parents, 'Tasks/Beta.md')
+    await userEvent.type(dialog.getByLabelText(/^Description/), 'For 40 people.')
     await userEvent.click(dialog.getByRole('button', { name: 'Create' }))
-    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: 'high', due: '2031-05-02', parent: 'Tasks/Beta.md' }]))
+    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: 'high', due: '2031-05-02', description: 'For 40 people.' }]))
     expect(await screen.findByRole('heading', { name: 'Book venue', level: 1 })).toBeInTheDocument()
   })
 
-  it('"New task" with only a title sends nulls for the rest', async () => {
+  it('"New task" with only a title sends nulls and an empty description', async () => {
     window.history.replaceState(null, '', '/tasks')
-    const calls = server([SELF], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+    const calls = server(WITH_ITEMS, true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
-    const dialog = within(await screen.findByRole('dialog'))
-    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue{Enter}')
-    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: null, due: null, parent: null }]))
+    await userEvent.type(within(await screen.findByRole('dialog')).getByLabelText('Title'), 'Book venue{Enter}')
+    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: null, due: null, description: '' }]))
   })
 
   it('a refused name shows the reason and keeps the dialog open', async () => {
     window.history.replaceState(null, '', '/tasks')
-    server([SELF], true, { 'POST /api/tasks': { status: 409, body: { detail: 'x', reason: 'exists' } } })
+    server(WITH_ITEMS, true, { 'POST /api/tasks': { status: 409, body: { detail: 'x', reason: 'exists' } } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
     const dialog = within(await screen.findByRole('dialog'))
@@ -1538,7 +1549,7 @@ describe('creating, renaming and deleting tasks (#9 part (c))', () => {
 
   it('with writes off, Create is off and says why', async () => {
     window.history.replaceState(null, '', '/tasks')
-    const calls = server([SELF], false)
+    const calls = server(WITH_ITEMS, false)
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'New task' }))
     const dialog = within(await screen.findByRole('dialog'))
@@ -1548,70 +1559,126 @@ describe('creating, renaming and deleting tasks (#9 part (c))', () => {
     expect(posts(calls, '/api/tasks')).toEqual([])
   })
 
-  it('a task with sub-tasks can get more, but can’t be renamed or deleted (decision 5a)', async () => {
-    openFocus(TASK)
-    server([{ ...SELF, subtasks: { done: 0, total: 2 } }])
+  it('ticking a sub-task on the board quotes the version read just before, then reloads', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const calls = server(WITH_ITEMS, true, { 'POST /api/task/checklist/set': changed })
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'New sub-task' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Make sub-tasks…' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Rename' })).toHaveAttribute('title', expect.stringContaining('can’t be renamed'))
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    const box = await within(await screen.findByRole('group', { name: 'Sub-tasks' })).findByRole('checkbox', { name: 'Book a demo slot' })
+    await waitFor(() => expect(box).toBeEnabled())
+    const loads = calls.filter((c) => c.path === '/api/tasks').length
+    await userEvent.click(box)
+    await waitFor(() => expect(posts(calls, '/api/task/checklist/set')).toEqual([{ path: TASK.path, index: 1, done: true, version: V }]))
+    const sourceAt = calls.findIndex((c) => c.path.startsWith('/api/note/source'))
+    expect(sourceAt).toBeLessThan(calls.findIndex((c) => c.path === '/api/task/checklist/set'))
+    await waitFor(() => expect(calls.filter((c) => c.path === '/api/tasks').length).toBeGreaterThan(loads))
   })
 
-  it('a sub-task and a done task offer no sub-tasks of their own', async () => {
-    openFocus(TASK)
-    server([{ ...SELF, parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }])
+  it('unticking sends done: false, and a card shows only the first 5 sub-tasks', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    const many = Array.from({ length: 7 }, (_, n) => ({ text: `Step ${n}`, done: n === 0 }))
+    const calls = server(WITH_ITEMS, true, { 'POST /api/task/checklist/set': changed }, [card({ path: TASK.path, title: TASK.title, checklist: many })])
+    render(<App />)
+    const group = within(await screen.findByRole('group', { name: 'Sub-tasks' }))
+    expect(group.getAllByRole('checkbox')).toHaveLength(5)
+    expect(group.getByText('+2 more')).toBeInTheDocument()
+    const box = group.getByRole('checkbox', { name: 'Step 0' })
+    await waitFor(() => expect(box).toBeEnabled())
+    await userEvent.click(box)
+    await waitFor(() => expect(posts(calls, '/api/task/checklist/set')).toEqual([{ path: TASK.path, index: 0, done: false, version: V }]))
+  })
+
+  it('a done task’s sub-tasks and a read-only server’s can’t be ticked', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    server(WITH_ITEMS, true, {}, [card({ path: TASK.path, title: TASK.title, status: 'done', checklist: ITEMS })])
     const { unmount } = render(<App />)
-    expect(await screen.findByRole('button', { name: 'Rename' })).toBeEnabled()
-    expect(screen.queryByRole('button', { name: 'New sub-task' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Make sub-tasks…' })).toBeNull()
+    const done = await within(await screen.findByRole('group', { name: 'Sub-tasks' })).findByRole('checkbox', { name: 'Book a demo slot' })
+    await waitFor(() => expect(done).toHaveAttribute('title', 'This task is done, so its sub-tasks can’t change.'))
+    expect(done).toBeDisabled()
     unmount()
-    openFocus(TASK)
-    server([{ ...SELF, status: 'done' }])
+    window.history.replaceState(null, '', '/tasks')
+    server(WITH_ITEMS, false)
     render(<App />)
-    expect(await screen.findByRole('button', { name: 'Delete' })).toBeEnabled()
-    expect(screen.queryByRole('button', { name: 'New sub-task' })).toBeNull()
+    const readOnly = await within(await screen.findByRole('group', { name: 'Sub-tasks' })).findByRole('checkbox', { name: 'Book a demo slot' })
+    await waitFor(() => expect(readOnly).toHaveAttribute('title', 'Read-only: the server was started without --allow-writes.'))
+    expect(readOnly).toBeDisabled()
   })
 
-  it('"New sub-task" in a task fixes the parent', async () => {
-    openFocus(TASK)
-    const calls = server([SELF], true, { 'POST /api/tasks': { status: 201, body: { path: NEW.path, version: V } } })
+  it('a refused tick shows the reason', async () => {
+    window.history.replaceState(null, '', '/tasks')
+    server(WITH_ITEMS, true, { 'POST /api/task/checklist/set': { status: 409, body: { detail: 'x', reason: 'changed' } } })
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'New sub-task' }))
-    const dialog = within(await screen.findByRole('dialog', { name: 'New sub-task' }))
-    expect(dialog.queryByLabelText('Sub-task of')).toBeNull()
-    expect(dialog.getByText(TASK.title)).toBeInTheDocument()
-    await userEvent.type(dialog.getByLabelText('Title'), 'Book venue{Enter}')
-    await waitFor(() => expect(posts(calls, '/api/tasks')).toEqual([{ title: 'Book venue', priority: null, due: null, parent: TASK.path }]))
+    const box = await within(await screen.findByRole('group', { name: 'Sub-tasks' })).findByRole('checkbox', { name: 'Book a demo slot' })
+    await waitFor(() => expect(box).toBeEnabled())
+    await userEvent.click(box)
+    expect(await screen.findByRole('alert')).toHaveTextContent('This task changed on disk since it was opened')
   })
 
-  it('"Make sub-tasks" quotes the version read when it opened, and reports what was made', async () => {
+  it('the task page shows the description, then every sub-task and a box to add one', async () => {
     openFocus(TASK)
-    const calls = server([SELF], true, { 'POST /api/task/subtasks': { status: 201, body: { created: ['Tasks/A.md', 'Tasks/B.md'], skipped: ['Tasks/C.md'] } } })
+    const calls = server(WITH_ITEMS, true, { 'POST /api/task/checklist/add': changed })
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Make sub-tasks…' }))
-    const dialog = within(await screen.findByRole('dialog', { name: 'Make sub-tasks' }))
-    expect(posts(calls, '/api/task/subtasks')).toEqual([]) // nothing until confirmed
-    await userEvent.click(await dialog.findByRole('button', { name: 'Make sub-tasks' }))
-    await waitFor(() => expect(posts(calls, '/api/task/subtasks')).toEqual([{ path: TASK.path, version: V }]))
-    expect(await dialog.findByRole('status')).toHaveTextContent('Made 2 sub-tasks; 1 already there.')
-    expect(dialog.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    const section = within(await screen.findByRole('region', { name: /Sub-tasks/ }))
+    expect(screen.getByRole('region', { name: 'Description' })).toHaveTextContent('Short description of the task.')
+    expect(section.getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'))).toEqual(['Write the invite', 'Book a demo slot'])
+    const box = await section.findByLabelText('New sub-task')
+    // Focused directly: in jsdom every element sits at 0,0, so a click "lands" on
+    // the panel resize bar (react-resizable-panels hit-tests by position).
+    ;(box as HTMLInputElement).focus()
+    await userEvent.type(box, 'Send the invites{Enter}', { skipClick: true })
+    await waitFor(() => expect(posts(calls, '/api/task/checklist/add')).toEqual([{ path: TASK.path, text: 'Send the invites', version: V }]))
+    await waitFor(() => expect(box).toHaveValue(''))
   })
 
-  it('"Make sub-tasks" refused for one line says which line', async () => {
+  it('a done task’s page has no box to add a sub-task', async () => {
     openFocus(TASK)
-    server([SELF], true, { 'POST /api/task/subtasks': { status: 400, body: { detail: 'Two checklist lines give the same task name.', line: 2 } } })
+    const DONE_TASK: NoteDetail = { ...WITH_ITEMS, task: { ...WITH_ITEMS.task!, status: 'done' } }
+    server(DONE_TASK)
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Make sub-tasks…' }))
+    const section = within(await screen.findByRole('region', { name: /Sub-tasks/ }))
+    expect(await section.findByText('This task is done, so its sub-tasks can’t change.')).toBeInTheDocument()
+    expect(section.queryByLabelText('New sub-task')).toBeNull()
+  })
+
+  it('Edit details starts from the task as it is and sends every field, split into lists', async () => {
+    openFocus(TASK)
+    const note: NoteDetail = { ...WITH_ITEMS, tags: ['beta'] }
+    const calls = server(note, true, { 'POST /api/task/details': changed })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit details' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Edit details' }))
+    expect(dialog.getByLabelText('Priority')).toHaveValue('high')
+    expect(dialog.getByLabelText('Due')).toHaveValue('2031-04-15')
+    expect(dialog.getByLabelText(/^Projects/)).toHaveValue('Atlas architecture')
+    expect(dialog.getByLabelText(/^Tags/)).toHaveValue('beta')
+    expect(dialog.getByLabelText(/^Description/)).toHaveValue('Short description of the task.')
+    await userEvent.selectOptions(dialog.getByLabelText('Priority'), '')
+    await userEvent.type(dialog.getByLabelText(/^Projects/), ', Harbor ,')
+    await userEvent.clear(dialog.getByLabelText(/^Tags/))
+    await userEvent.type(dialog.getByLabelText(/^Tags/), 'beta, launch')
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Save changes' })).toBeEnabled())
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() =>
+      expect(posts(calls, '/api/task/details')).toEqual([
+        { path: TASK.path, version: V, priority: null, due: '2031-04-15', projects: ['Atlas architecture', 'Harbor'], tags: ['beta', 'launch'], description: 'Short description of the task.' },
+      ]),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('a refused Edit details shows the reason and keeps the dialog open', async () => {
+    openFocus(TASK)
+    server(WITH_ITEMS, true, { 'POST /api/task/details': { status: 400, body: { detail: 'A tag is letters, digits, _, - or /.' } } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit details' }))
     const dialog = within(await screen.findByRole('dialog'))
-    await userEvent.click(await dialog.findByRole('button', { name: 'Make sub-tasks' }))
-    expect(await dialog.findByRole('alert')).toHaveTextContent('Two checklist lines give the same task name. (Unticked line 2 of the checklist.)')
+    await waitFor(() => expect(dialog.getByRole('button', { name: 'Save changes' })).toBeEnabled())
+    await userEvent.click(dialog.getByRole('button', { name: 'Save changes' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent('A tag is letters, digits, _, - or /.')
   })
 
   it('Rename sends the new name and opens the renamed task', async () => {
     openFocus(TASK)
-    const calls = server([SELF], true, { 'POST /api/task/rename': { status: 200, body: { path: NEW.path } } })
+    const calls = server(WITH_ITEMS, true, { 'POST /api/task/rename': { status: 200, body: { path: NEW.path } } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'Rename' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Rename task' }))
@@ -1627,7 +1694,7 @@ describe('creating, renaming and deleting tasks (#9 part (c))', () => {
 
   it('Delete asks first, then moves the task to the trash and goes to Tasks', async () => {
     openFocus(TASK)
-    const calls = server([SELF], true, { 'POST /api/task/delete': { status: 200, body: { trashed_to: '.trash/Tasks/a.md' } } })
+    const calls = server(WITH_ITEMS, true, { 'POST /api/task/delete': { status: 200, body: { trashed_to: '.trash/Tasks/a.md' } } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Delete task' }))

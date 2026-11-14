@@ -100,7 +100,7 @@ In a note, **Edit** opens its body as plain Markdown. **Save** (or ⌘S / Ctrl+S
 
 ### Creating, renaming and deleting notes
 
-These also need `--allow-writes`, and work on notes only: tasks get theirs in [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9).
+These also need `--allow-writes`, and work on notes only: tasks have their own (see Tasks below).
 
 - **New note** on the Notes page makes an empty note in the folder you're viewing (the top level from All notes, a tag or a search) and opens it for editing. `.md` is added to the name. A name can't contain `/ \ : * ? " < > | # ^ [ ]`, and an existing note is never replaced.
 - **Rename** (next to Read/Edit on a note) changes the name only; the note stays in its folder. It never replaces another note, and changing only capitals works on the Mac's usual disk. The dialog says how many notes and tasks link to the note: **their `[[links]]` aren't updated**, so they stop working.
@@ -111,11 +111,15 @@ These also need `--allow-writes`, and work on notes only: tasks get theirs in [#
 
 **Tasks** shows every task (a note tagged `task`) as a board by stage (Open, In progress, In review, Done) or as a list. The board is the default. Filter by stage, priority or project; the view and filters stay in the address, so a filtered view can be bookmarked. Opening a task shows it in the focus view. A task whose stage isn't one of the four goes in a **No stage** column, shown only when there is one.
 
-**Sub-tasks:** a task tagged `subtask` that links to another task in `projects` is that task's sub-task. Its card says "Sub-task of …", and the parent's card shows how many of its sub-tasks are done. A `projects` link to a task *without* the `subtask` tag (a handoff note linking back to its task, say) doesn't make a sub-task, and isn't shown as a project. Links to notes are projects.
+**Cards** show the task's title, the first line of its description, its priority, due date and projects, and its **sub-tasks**. A `projects` link to a note (or to a note not written yet) is a project; a link to another task (a handoff note linking back to its task, say) isn't shown.
+
+**Sub-tasks are the task's own checklist lines** (`- [ ] …`, ticked `- [x] …`), as in Obsidian. They're shown inside the task's card (the first 5, with "+N more") and on the task's page, each with a tick box. A checklist line counts anywhere in the task except inside a code block and under `## Status History` or `## Context`.
+
+**The description** is the text at the top of the task, before its first `## ` heading, without a `# Title` line and without the checklist lines.
 
 **Moving a task** (needs `--allow-writes`): **Move to …** on a card, in the list's Next column or on the task itself moves it one stage on: Open → In progress → In review → Done. Only forward, one stage at a time. Each move changes `status` (and `dateModified`, if the task has one) and adds one line to `## Status History`; nothing else in the note changes. If the task changed on disk since it was read, nothing is moved.
 
-**Sign off and close** (in review → done) needs a sign-off name: start the server with `--identity NAME` (for example `--identity sheikh`). It isn't a login; it records who started the server. Closing is refused if the task's history doesn't end with its move into review, or if any of its sub-tasks isn't done. A close writes, in the formats the Sheiko Task Lifecycle plugin uses:
+**Sign off and close** (in review → done) needs a sign-off name: start the server with `--identity NAME` (for example `--identity sheikh`). It isn't a login; it records who started the server. Closing is refused if the task's history doesn't end with its move into review, or if any of its sub-tasks isn't ticked. A close writes, in the formats the Sheiko Task Lifecycle plugin uses:
 
 - a `## Context` line: `- **<time> — <name>:** Signed off (not closed)`;
 - a history line: `- <time> — in-review → done (signed off by <name> at <time>)`;
@@ -123,7 +127,16 @@ These also need `--allow-writes`, and work on notes only: tasks get theirs in [#
 
 Fields are changed line by line in the frontmatter and checked afterwards. A task whose frontmatter has a field written twice, or the changed field written as a list or block, isn't moved: fix it in Obsidian first.
 
-Creating tasks and sub-tasks comes in the next part of [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9). **If you also run Sheiko in Obsidian on the same folder**, it adds its own history lines when it sees a status change, so you'd get duplicates. Keep the two apart for now (the real-vault step waits on this).
+### Creating and changing tasks
+
+All of these need `--allow-writes`, and refuse if the task changed on disk since it was opened.
+
+- **New task** on the Tasks page makes `Tasks/<title>.md`: `tags: [task]`, `status: open`, `dateCreated`, `dateModified`, the priority and due date if given, the description as its top text, and a `## Status History` holding `created → open`. A name can't contain `/ \ : * ? " < > | # ^ [ ]`, and an existing note is never replaced. A description can't contain a `#` or `##` heading (it would end the description); use `###` or below.
+- **Sub-tasks:** on the task's page, **Add a sub-task** adds one `- [ ]` line after the last one (or at the end of the description). Ticking a box changes that one character in the file. A done task's sub-tasks can't change.
+- **Edit details** on the task's page changes priority, due date, projects, tags and description. Only fields whose value changes are written, so a value Onyx doesn't show (an unknown priority, say) is kept unless you set that field. Projects are note names, written as `[[links]]`; tags are without `#`. The title is the file name: change it with **Rename**.
+- **Rename** keeps the task in its folder; **Delete** moves it to `.trash`, as for notes. Links to it in other notes aren't updated.
+
+**If you also run Sheiko in Obsidian on the same folder**, it adds its own history lines when it sees a status change, so you'd get duplicates. Keep the two apart for now (the real-vault step waits on this).
 
 **Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
 

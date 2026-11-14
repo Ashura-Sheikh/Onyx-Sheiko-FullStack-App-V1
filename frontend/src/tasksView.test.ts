@@ -9,8 +9,8 @@ const card = (over: Partial<TaskCard>): TaskCard => ({
   priority: null,
   due: null,
   projects: [],
-  parent: null,
-  subtasks: null,
+  description: null,
+  checklist: [],
   ...over,
 })
 

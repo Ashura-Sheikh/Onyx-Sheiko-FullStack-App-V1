@@ -3,7 +3,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { focusPath, getTasks, type Priority, type Stage, type TaskCard } from './api'
 import { PRIORITY_LABELS, shortDate, STAGE_LABELS } from './labels'
 import { PriorityPill, StagePill } from './StagePill'
+import { CardChecklist } from './Checklist'
 import { NewTask } from './TaskActions'
+import { checklistProgress } from './taskWrites'
 import TaskMove from './TaskMove'
 import { columns, filterTasks, projectsOf, readFilter, tasksPath, type TasksFilter } from './tasksView'
 
@@ -11,37 +13,29 @@ const SELECT =
   'rounded-lg border border-stone-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-emerald-600 dark:border-stone-700 dark:bg-stone-950'
 const columnLabel = (stage: Stage | 'none') => (stage === 'none' ? 'No stage' : STAGE_LABELS[stage])
 
-function Subtasks({ task }: { task: TaskCard }) {
-  if (!task.subtasks) return null
-  const { done, total } = task.subtasks
+function Description({ task }: { task: TaskCard }) {
+  if (!task.description) return null
+  return <p className="mt-1 line-clamp-2 text-sm text-stone-500">{task.description}</p>
+}
+
+function Progress({ task }: { task: TaskCard }) {
+  const progress = checklistProgress(task.checklist)
+  if (!progress) return null
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-stone-500">
-      <progress value={done} max={total} aria-label={`${done} of ${total} sub-tasks done`} className="h-1.5 w-12 accent-emerald-600" />
-      {done}/{total} sub-tasks
+    <span className="text-xs text-stone-500">
+      {progress.done}/{progress.total} sub-tasks
     </span>
   )
 }
 
-function Parent({ task }: { task: TaskCard }) {
-  if (!task.parent) return null
-  return (
-    <span className="block truncate text-xs text-stone-500">
-      ↳ Sub-task of{' '}
-      <Link to={focusPath(task.parent.path)} className="hover:underline">
-        {task.parent.title}
-      </Link>
-    </span>
-  )
-}
-
-/** Mockup B's card: title, priority, due date, project, parent or sub-task progress. */
+/** Mockup B's card: title, description, priority, due date, projects, and the sub-tasks inside it. */
 function Card({ task }: { task: TaskCard }) {
   return (
     <li className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-800">
-      <Parent task={task} />
       <Link to={focusPath(task.path)} className="block font-medium hover:underline">
         {task.title}
       </Link>
+      <Description task={task} />
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
         <PriorityPill priority={task.priority} />
         {task.due && <time dateTime={task.due}>due {shortDate(task.due)}</time>}
@@ -50,8 +44,8 @@ function Card({ task }: { task: TaskCard }) {
             {p}
           </span>
         ))}
-        <Subtasks task={task} />
       </div>
+      <CardChecklist path={task.path} status={task.status} items={task.checklist} />
       <TaskMove task={task} />
     </li>
   )
@@ -102,12 +96,12 @@ function List({ tasks }: { tasks: TaskCard[] }) {
           {tasks.map((t) => (
             <tr key={t.path}>
               <td className="py-2 pr-3">
-                <Parent task={t} />
                 <Link to={focusPath(t.path)} className="font-medium hover:underline">
                   {t.title}
                 </Link>
+                <Description task={t} />
                 <div>
-                  <Subtasks task={t} />
+                  <Progress task={t} />
                 </div>
               </td>
               <td className="py-2 pr-3">{t.status ? <StagePill stage={t.status} /> : <span className="text-stone-500">No stage</span>}</td>
