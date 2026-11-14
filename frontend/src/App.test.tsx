@@ -1260,7 +1260,7 @@ describe('tasks board and list', () => {
     card({ path: 'Tasks/Rev.md', title: 'Review cache design', status: 'in-review', priority: 'low', projects: ['Atlas architecture'] }),
     card({ path: 'Tasks/Invite.md', title: 'Write invite text', status: 'done', parent: { path: 'Tasks/Beta.md', title: 'Launch beta' } }),
   ]
-  const withTasks = (tasks: TaskCard[] = TASKS) => ({ 'GET /api/tasks': { status: 200, body: { tasks } } })
+  const withTasks = (tasks: TaskCard[] = TASKS) => ({ 'GET /api/tasks': { status: 200, body: { tasks } }, 'GET /api/app-settings': { status: 200, body: { writable: false, identity: null } } })
   const titles = (region: HTMLElement) => within(region).queryAllByRole('listitem').map((li) => within(li).getAllByRole('link').at(-1)!.textContent)
 
   it('is in the navigation and shows the board by stage, by default', async () => {
@@ -1304,7 +1304,7 @@ describe('tasks board and list', () => {
     expect(own).toEqual(['Pick a layout', 'Set up feedback form', 'Launch beta', 'Review cache design', 'Write invite text'])
     expect(within(rows[1]).getByText(/Sub-task of/)).toBeInTheDocument()
     expect(within(rows[2]).getByRole('progressbar', { name: '1 of 2 sub-tasks done' })).toBeInTheDocument()
-    expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Pick a layout', 'Open', 'High priority', '16 Apr', 'Atlas kickoff'])
+    expect(within(rows[0]).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Pick a layout', 'Open', 'High priority', '16 Apr', 'Atlas kickoff', 'Move to In progress →Read-only: the server was started without --allow-writes.'])
     expect(window.location.search).toBe('?view=list')
   })
 
@@ -1360,5 +1360,118 @@ describe('tasks board and list', () => {
     expect(open.getAllByText(hostile)).toHaveLength(3) // title, parent link, project
     expect(within(screen.getByLabelText('Project')).getByRole('option', { name: hostile })).toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
+  })
+})
+
+describe('moving tasks', () => {
+  const card = (over: Partial<TaskCard>): TaskCard => ({ path: 'Tasks/x.md', title: 'x', status: 'open', priority: null, due: null, projects: [], parent: null, subtasks: null, ...over })
+  const OPEN_TASK = card({ path: 'Tasks/Open.md', title: 'Tidy folder', status: 'open' })
+  const REVIEW_TASK = card({ path: 'Tasks/Rev.md', title: 'Update checklist', status: 'in-review' })
+  const DONE_TASK = card({ path: 'Tasks/Done.md', title: 'Old job', status: 'done' })
+  const V = 'c'.repeat(64)
+  const sourceOf = (path: string): Record<string, Reply> => ({
+    [`GET /api/note/source?path=${encodeURIComponent(path)}`]: { status: 200, body: { path, frontmatter: '', body: '', version: V, writable: true } },
+  })
+  function server(settings = { writable: true, identity: 'sheikh' as string | null }, extra: Record<string, Reply> = {}) {
+    window.history.replaceState(null, '', '/tasks')
+    return fakeServer({
+      ...signedIn,
+      ...withHome,
+      'GET /api/tasks': { status: 200, body: { tasks: [OPEN_TASK, REVIEW_TASK, DONE_TASK] } },
+      'GET /api/app-settings': { status: 200, body: settings },
+      ...sourceOf(OPEN_TASK.path),
+      ...sourceOf(REVIEW_TASK.path),
+      ...extra,
+    })
+  }
+  const moves = (calls: Call[]) => calls.filter((c) => c.method === 'POST' && c.path === '/api/task/move').map((c) => JSON.parse(c.body!))
+
+  it('"Move to In progress" moves one stage, quoting the version read just before, then reloads the board', async () => {
+    const calls = server(undefined, { 'POST /api/task/move': { status: 200, body: { path: OPEN_TASK.path, version: 'd'.repeat(64), status: 'in-progress' } } })
+    render(<App />)
+    const open = within(await screen.findByRole('region', { name: 'Open' }))
+    const boardLoads = calls.filter((c) => c.path === '/api/tasks').length
+    await userEvent.click(await open.findByRole('button', { name: 'Move to In progress →' }))
+    await waitFor(() => expect(moves(calls)).toEqual([{ path: OPEN_TASK.path, to: 'in-progress', version: V }]))
+    const sourceAt = calls.findIndex((c) => c.path.startsWith('/api/note/source'))
+    expect(sourceAt).toBeLessThan(calls.findIndex((c) => c.path === '/api/task/move'))
+    await waitFor(() => expect(calls.filter((c) => c.path === '/api/tasks').length).toBeGreaterThan(boardLoads))
+  })
+
+  it('in review, "Sign off and close" asks first, names who signs off, then moves to done', async () => {
+    const calls = server(undefined, { 'POST /api/task/move': { status: 200, body: { path: REVIEW_TASK.path, version: 'd'.repeat(64), status: 'done' } } })
+    render(<App />)
+    const review = within(await screen.findByRole('region', { name: 'In review' }))
+    await userEvent.click(await review.findByRole('button', { name: 'Sign off and close…' }))
+    const dialog = within(await screen.findByRole('dialog', { name: 'Sign off and close' }))
+    expect(dialog.getByText('sheikh')).toBeInTheDocument()
+    expect(dialog.getByText('Update checklist')).toBeInTheDocument()
+    expect(moves(calls)).toEqual([]) // nothing until confirmed
+    await userEvent.click(dialog.getByRole('button', { name: 'Sign off and close' }))
+    await waitFor(() => expect(moves(calls)).toEqual([{ path: REVIEW_TASK.path, to: 'done', version: V }]))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('Cancel signs nothing off', async () => {
+    const calls = server()
+    render(<App />)
+    await userEvent.click(await within(await screen.findByRole('region', { name: 'In review' })).findByRole('button', { name: 'Sign off and close…' }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(moves(calls)).toEqual([])
+  })
+
+  it('a refused close shows the reason in the dialog and keeps it open', async () => {
+    server(undefined, { 'POST /api/task/move': { status: 400, body: { detail: "This task has sub-tasks that aren't done yet." } } })
+    render(<App />)
+    await userEvent.click(await within(await screen.findByRole('region', { name: 'In review' })).findByRole('button', { name: 'Sign off and close…' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialog.getByRole('button', { name: 'Sign off and close' }))
+    expect(await dialog.findByRole('alert')).toHaveTextContent("This task has sub-tasks that aren't done yet.")
+  })
+
+  it('a task changed on disk says so and moves nothing', async () => {
+    server(undefined, { 'POST /api/task/move': { status: 409, body: { detail: 'x', reason: 'changed' } } })
+    render(<App />)
+    const open = within(await screen.findByRole('region', { name: 'Open' }))
+    await userEvent.click(await open.findByRole('button', { name: 'Move to In progress →' }))
+    expect(await open.findByRole('alert')).toHaveTextContent('This task changed on disk since it was opened')
+  })
+
+  it('without a sign-off name, closing is off and says why; other moves still work', async () => {
+    server({ writable: true, identity: null })
+    render(<App />)
+    const review = within(await screen.findByRole('region', { name: 'In review' }))
+    const close = await review.findByRole('button', { name: 'Sign off and close…' })
+    expect(close).toBeDisabled()
+    expect(close).toHaveAttribute('title', 'Sign-off needs a name: start the server with --identity NAME.')
+    expect(within(screen.getByRole('region', { name: 'Open' })).getByRole('button', { name: 'Move to In progress →' })).toBeEnabled()
+  })
+
+  it('with writes off, every move is off and says why', async () => {
+    const calls = server({ writable: false, identity: 'sheikh' })
+    render(<App />)
+    const open = within(await screen.findByRole('region', { name: 'Open' }))
+    const button = await open.findByRole('button', { name: 'Move to In progress →' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('title', 'Read-only: the server was started without --allow-writes.')
+    expect(within(screen.getByRole('region', { name: 'In review' })).getByRole('button', { name: 'Sign off and close…' })).toBeDisabled()
+    await userEvent.click(button)
+    expect(moves(calls)).toEqual([])
+  })
+
+  it('a done task has nothing to move', async () => {
+    server()
+    render(<App />)
+    const done = within(await screen.findByRole('region', { name: 'Done' }))
+    await done.findByText('Old job')
+    expect(done.queryByRole('button')).toBeNull()
+  })
+
+  it('the focus view of a task has the move button too', async () => {
+    openFocus(TASK)
+    fakeServer({ ...signedIn, ...withHome, ...withNote(TASK), 'GET /api/app-settings': { status: 200, body: { writable: true, identity: 'sheikh' } } })
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Move to In review →' })).toBeEnabled()
   })
 })

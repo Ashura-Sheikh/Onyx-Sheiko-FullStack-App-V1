@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { focusPath, getTasks, type Priority, type Stage, type TaskCard } from './api'
 import { PRIORITY_LABELS, shortDate, STAGE_LABELS } from './labels'
 import { PriorityPill, StagePill } from './StagePill'
+import TaskMove from './TaskMove'
 import { columns, filterTasks, projectsOf, readFilter, tasksPath, type TasksFilter } from './tasksView'
 
 const SELECT =
@@ -50,6 +51,7 @@ function Card({ task }: { task: TaskCard }) {
         ))}
         <Subtasks task={task} />
       </div>
+      <TaskMove task={task} />
     </li>
   )
 }
@@ -92,6 +94,7 @@ function List({ tasks }: { tasks: TaskCard[] }) {
             <th className="py-2 pr-3 font-medium">Priority</th>
             <th className="py-2 pr-3 font-medium">Due</th>
             <th className="py-2 pr-3 font-medium">Projects</th>
+            <th className="py-2 pr-3 font-medium">Next</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
@@ -112,6 +115,9 @@ function List({ tasks }: { tasks: TaskCard[] }) {
               </td>
               <td className="py-2 pr-3 whitespace-nowrap">{t.due ? shortDate(t.due) : ''}</td>
               <td className="py-2 pr-3">{t.projects.join(', ')}</td>
+              <td className="py-2 pr-3">
+                <TaskMove task={t} />
+              </td>
             </tr>
           ))}
         </tbody>

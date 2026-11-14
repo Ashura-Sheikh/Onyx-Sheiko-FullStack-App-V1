@@ -1,6 +1,34 @@
 {
   "components": {
     "schemas": {
+      "AppSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sign-off name (--identity); null if not set",
+            "title": "Identity"
+          },
+          "writable": {
+            "description": "False unless the server was started with --allow-writes",
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "writable",
+          "identity"
+        ],
+        "title": "AppSettings",
+        "type": "object"
+      },
       "CreateNote": {
         "additionalProperties": false,
         "properties": {
@@ -276,6 +304,40 @@
           "reason"
         ],
         "title": "MoveRefused",
+        "type": "object"
+      },
+      "MoveTask": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "open",
+              "in-progress",
+              "in-review",
+              "done"
+            ],
+            "title": "To",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version that was opened",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "to",
+          "version"
+        ],
+        "title": "MoveTask",
         "type": "object"
       },
       "NoteCreated": {
@@ -1110,6 +1172,36 @@
         "title": "TaskHistoryEntry",
         "type": "object"
       },
+      "TaskMoved": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "in-progress",
+              "in-review",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "version",
+          "status"
+        ],
+        "title": "TaskMoved",
+        "type": "object"
+      },
       "TaskRef": {
         "additionalProperties": false,
         "properties": {
@@ -1262,6 +1354,24 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/app-settings": {
+      "get": {
+        "operationId": "app_settings_api_app_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Settings"
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "health_api_health_get",
@@ -1841,9 +1951,87 @@
         "summary": "Sign In"
       }
     },
+    "/api/task/move": {
+      "post": {
+        "operationId": "move_task_api_task_move_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskMoved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Move refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Writes are turned off"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No such task"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveRefused"
+                }
+              }
+            },
+            "description": "Changed on disk since opened"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move Task"
+      }
+    },
     "/api/tasks": {
       "get": {
-        "operationId": "tasks_api_tasks_get",
+        "operationId": "task_list_api_tasks_get",
         "responses": {
           "200": {
             "content": {
@@ -1856,7 +2044,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Tasks"
+        "summary": "Task List"
       }
     }
   }

@@ -82,7 +82,7 @@ Notes can be edited only when the server is started with `--allow-writes`. Witho
 
 ```bash
 cd backend
-uv run python -m onyx.try_writes --today 2031-04-16
+uv run python -m onyx.try_writes --today 2031-04-16 --identity sheikh
 ```
 
 It copies `dev-vault/` into a new temporary folder, prints where, and starts the server on the copy with `--allow-writes`. Each run starts from a fresh copy.
@@ -113,7 +113,17 @@ These also need `--allow-writes`, and work on notes only: tasks get theirs in [#
 
 **Sub-tasks:** a task tagged `subtask` that links to another task in `projects` is that task's sub-task. Its card says "Sub-task of …", and the parent's card shows how many of its sub-tasks are done. A `projects` link to a task *without* the `subtask` tag (a handoff note linking back to its task, say) doesn't make a sub-task, and isn't shown as a project. Links to notes are projects.
 
-The Tasks page is read-only for now; moving tasks between stages, sign-off and creating tasks come in the next parts of [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9).
+**Moving a task** (needs `--allow-writes`): **Move to …** on a card, in the list's Next column or on the task itself moves it one stage on: Open → In progress → In review → Done. Only forward, one stage at a time. Each move changes `status` (and `dateModified`, if the task has one) and adds one line to `## Status History`; nothing else in the note changes. If the task changed on disk since it was read, nothing is moved.
+
+**Sign off and close** (in review → done) needs a sign-off name: start the server with `--identity NAME` (for example `--identity sheikh`). It isn't a login; it records who started the server. Closing is refused if the task's history doesn't end with its move into review, or if any of its sub-tasks isn't done. A close writes, in the formats the Sheiko Task Lifecycle plugin uses:
+
+- a `## Context` line: `- **<time> — <name>:** Signed off (not closed)`;
+- a history line: `- <time> — in-review → done (signed off by <name> at <time>)`;
+- `completedDate`, `closedBy` and `timeToCloseMinutes` only where they're blank, never overwriting, and no duration from a date-only `dateCreated`; plus `closureSource: onyx` when it wrote any of them.
+
+Fields are changed line by line in the frontmatter and checked afterwards. A task whose frontmatter has a field written twice, or the changed field written as a list or block, isn't moved: fix it in Obsidian first.
+
+Creating tasks and sub-tasks comes in the next part of [#9](https://github.com/Ashura-Sheikh/Onyx-Sheiko-FullStack-App-V1/issues/9). **If you also run Sheiko in Obsidian on the same folder**, it adds its own history lines when it sees a status change, so you'd get duplicates. Keep the two apart for now (the real-vault step waits on this).
 
 **Frontend development with live reload:** keep the server running, then `npm run dev` in `frontend/` and open the address Vite prints. Vite forwards `/api` to the server. The CSP applies to the built app served by the server, so check security-related changes there too.
 

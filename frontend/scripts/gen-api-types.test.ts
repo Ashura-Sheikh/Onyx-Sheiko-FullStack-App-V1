@@ -11,6 +11,7 @@ describe('generated API types', () => {
 
   it('maps every GET endpoint to its response type', () => {
     expect(getRoutes(api)).toEqual([
+      ['/api/app-settings', 'AppSettings'],
       ['/api/health', 'Health'],
       ['/api/home', 'HomeData'],
       ['/api/items', 'ItemList'],

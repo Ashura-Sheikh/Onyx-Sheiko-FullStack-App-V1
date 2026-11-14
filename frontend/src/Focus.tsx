@@ -8,6 +8,7 @@ import Markdown, { type ResolvedLinks } from './Markdown'
 import { RenameDelete } from './NoteActions'
 import NoteEditor, { type Leaving } from './NoteEditor'
 import { PriorityPill, StagePill } from './StagePill'
+import TaskMove from './TaskMove'
 
 // Longer task bodies start folded to a short summary.
 export const SUMMARY_CHARS = 600
@@ -98,9 +99,10 @@ function FocusItem({ item, startIn }: { item: NoteDetail; startIn: Mode }) {
         <NoteEditor path={item.path} note={item} leaving={leaving} onClose={closeEditor} />
       ) : task ? (
         <>
-          <div className="mb-8 flex flex-wrap gap-1.5">
+          <div className="mb-8 flex flex-wrap items-center gap-1.5">
             <StagePill stage={task.status} />
             <PriorityPill priority={task.priority} />
+            <TaskMove task={{ path: item.path, title: item.title, status: task.status }} />
           </div>
           <TaskSummary body={item.body} links={item.links} />
         </>

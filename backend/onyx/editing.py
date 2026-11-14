@@ -26,7 +26,7 @@ from onyx.summary import is_task
 from onyx.vault import Note, NoteNotFound, PathRejected, Vault
 
 
-def _listed(vault: Vault, requested: str) -> str:
+def listed(vault: Vault, requested: str) -> str:
     names = {name: name for name in vault.list_notes()}
     name = names.get(requested)
     if name is None:
@@ -49,7 +49,7 @@ def with_line_endings_of(body: str, original: str) -> str:
 def source(vault: Vault, requested: str) -> dict:
     """The note's body for the editor, its frontmatter (shown, not edited) and
     its version. Raises NoteNotFound if there's no such note."""
-    name = _listed(vault, requested)
+    name = listed(vault, requested)
     try:
         note = vault.read(name)
     except (PathRejected, UnicodeDecodeError) as error:
@@ -68,7 +68,7 @@ def save_body(vault: Vault, requested: str, body: str, version: str) -> Note:
 
     Raises NoteNotFound, or VersionConflict if the file isn't the version the
     editor opened."""
-    name = _listed(vault, requested)
+    name = listed(vault, requested)
     try:
         current = vault.read(name)
     except (PathRejected, UnicodeDecodeError) as error:
@@ -134,7 +134,7 @@ def create_note(vault: Vault, folder: str, typed_name: str) -> Note:
 
 def rename_note(vault: Vault, requested: str, typed_name: str, version: str) -> str:
     """Rename a note in its folder. Returns the new path."""
-    name = _listed(vault, requested)
+    name = listed(vault, requested)
     _only_notes(vault, name)
     folder = str(PurePosixPath(name).parent)
     new = _in_folder("" if folder == "." else folder, note_file_name(typed_name))
@@ -143,7 +143,7 @@ def rename_note(vault: Vault, requested: str, typed_name: str, version: str) -> 
 
 def delete_note(vault: Vault, requested: str, version: str, now: datetime) -> str:
     """Move a note to the vault's .trash folder. Returns where it went."""
-    name = _listed(vault, requested)
+    name = listed(vault, requested)
     _only_notes(vault, name)
     return vault.trash(name, version, now)
 
@@ -151,6 +151,6 @@ def delete_note(vault: Vault, requested: str, version: str, now: datetime) -> st
 def current_version(vault: Vault, name: str) -> str | None:
     """The note's version now, or None if it's gone (for a conflict answer)."""
     try:
-        return vault.read(_listed(vault, name)).version
+        return vault.read(listed(vault, name)).version
     except (NoteNotFound, PathRejected, UnicodeDecodeError):
         return None

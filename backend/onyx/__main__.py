@@ -27,8 +27,13 @@ def parse_args(argv: list[str] | None = None) -> Settings:
         action="store_true",
         help="let the app change notes (off by default; refused for folders inside the repo)",
     )
+    parser.add_argument(
+        "--identity",
+        default=os.environ.get("ONYX_IDENTITY"),
+        help="the name task sign-offs are recorded under (needed to move a task to done)",
+    )
     args = parser.parse_args(argv)
-    return load_settings(args.vault, args.port, args.today, args.allow_writes)
+    return load_settings(args.vault, args.port, args.today, args.allow_writes, args.identity)
 
 
 def uvicorn_config(app, settings: Settings) -> uvicorn.Config:
@@ -54,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Vault: {settings.vault}", flush=True)
     print(f"Cache: {app.state.cache.path}", flush=True)
     print(f"Writes: {'on (--allow-writes)' if settings.allow_writes else 'off'}", flush=True)
+    print(f"Sign-off name: {settings.identity or 'not set (--identity)'}", flush=True)
     if settings.today is not None:
         print(f"Today (fixed with --today): {settings.today.isoformat()}", flush=True)
     print(f"Launch code (one use, {minutes} minutes): {app.state.auth.launch_code}", flush=True)
