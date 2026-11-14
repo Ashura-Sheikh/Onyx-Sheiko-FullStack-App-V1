@@ -2,7 +2,6 @@
 synthetic: true
 tags:
   - task
-  - subtask
 status: done
 priority: normal
 due: 2031-04-18
@@ -15,7 +14,7 @@ completedDate: 2031-04-15T16:00:00Z
 
 # Write beta invite text
 
-Made-up sub-task of Launch Atlas beta, for development and tests.
+Made-up task for development and tests. It links to Launch Atlas beta in `projects`, like a handoff linking back to its task, so that link isn't shown as a project.
 
 ## Status History
 

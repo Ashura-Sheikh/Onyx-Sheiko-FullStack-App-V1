@@ -380,6 +380,8 @@ def test_note_detail_for_a_task(tmp_path):
         "completed": "2031-04-13T12:30:00+00:00",
         "closed_by": "owner",
         "time_to_close_minutes": 90,
+        "description": "What this task is about.",
+        "checklist": [],
         "history": [
             {"at": "2031-04-13T11:00:00+00:00", "from": "created", "to": "open", "remark": None},
             {

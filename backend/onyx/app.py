@@ -68,15 +68,30 @@ class CreateTask(BaseModel):
     title: str = Field(min_length=1, max_length=255, description="The task's name; .md is added")
     priority: Literal["high", "normal", "low"] | None = None
     due: date | None = None
-    parent: str | None = Field(
-        default=None, min_length=1, max_length=512, description="A parent task's path"
-    )
+    description: str = Field(default="", max_length=20_000)
 
 
 class TaskVersion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     path: str = Field(min_length=1, max_length=512)
     version: str = Field(pattern=r"^[0-9a-f]{64}$", description="The version that was opened")
+
+
+class AddChecklistItem(TaskVersion):
+    text: str = Field(min_length=1, max_length=300)
+
+
+class SetChecklistItem(TaskVersion):
+    index: int = Field(ge=0, le=10_000, description="Which checklist line, 0 = the first")
+    done: bool
+
+
+class TaskDetails(TaskVersion):
+    priority: Literal["high", "normal", "low"] | None
+    due: date | None
+    projects: list[str] = Field(max_length=50)
+    tags: list[str] = Field(max_length=50)
+    description: str = Field(max_length=20_000)
 
 
 def now() -> datetime:
@@ -347,75 +362,88 @@ def create_app(settings: Settings) -> FastAPI:
             return refused(error)
         return {"path": moved.path, "version": moved.version, "status": body.to}
 
-    # Part (c) of #9: create, sub-tasks, rename, delete (onyx/task_writes.py).
-    def task_refused(error: task_writes.TaskRefused) -> JSONResponse:
-        detail = task_writes.TASK_REFUSALS.get(error.code, "That isn't allowed for this task.")
-        return JSONResponse({"detail": detail, "line": error.line}, status_code=400)
-
-    task_errors = (*write_errors, task_writes.TaskRefused)
-
+    # Part (c) of #9: create, sub-tasks (checklist lines), details, rename, delete
+    # (onyx/task_writes.py).
     def task_write(action):
         if not settings.allow_writes:
             return writes_off()
         try:
             return action()
         except task_writes.TaskRefused as error:
-            return task_refused(error)
-        except task_writes.PartlyDone as error:
-            return JSONResponse(
-                {
-                    "detail": "Some sub-tasks were made, then a file with the next name "
-                    "appeared, so it stopped. Check the list and run it again.",
-                    "created": error.created,
-                },
-                status_code=409,
-            )
-        except task_errors as error:
+            detail = task_writes.TASK_REFUSALS.get(error.code, "That isn't allowed for this task.")
+            return JSONResponse({"detail": detail}, status_code=400)
+        except write_errors as error:
             return refused(error)
+
+    task_responses = {
+        400: {"model": models.TaskRefusal, "description": "Refused"},
+        403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
+        404: {"model": models.ErrorResponse, "description": "No such task"},
+        409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},
+    }
 
     @app.post(
         "/api/tasks",
         status_code=201,
         response_model=models.TaskCreated,
         responses={
-            400: {"model": models.TaskRefusal, "description": "Name or parent not allowed"},
-            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
-            404: {"model": models.ErrorResponse, "description": "No such parent"},
-            409: {"model": models.MoveRefused, "description": "A note with that name exists"},
+            **task_responses,
+            409: {"model": models.MoveRefused, "description": "Name taken"},
         },
     )
     def create_task(body: CreateTask) -> dict:
         def action() -> dict:
             created = task_writes.create_task(
-                vault, body.title, clock(), body.priority, body.due, body.parent
+                vault, body.title, clock(), body.priority, body.due, body.description
             )
             return {"path": created.path, "version": created.version}
 
         return task_write(action)
 
-    @app.post(
-        "/api/task/subtasks",
-        status_code=201,
-        response_model=models.SubtasksMade,
-        responses={
-            400: {"model": models.TaskRefusal, "description": "Refused, maybe for one line"},
-            403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
-            404: {"model": models.ErrorResponse, "description": "No such task"},
-            409: {"model": models.PartlyMade, "description": "Changed on disk, or partly done"},
-        },
-    )
-    def make_subtasks(body: TaskVersion) -> dict:
-        def action() -> dict:
-            made = task_writes.make_subtasks(vault, body.path, body.version, clock())
-            return {"created": made.created, "skipped": made.skipped}
+    def changed(note) -> dict:
+        return {"path": note.path, "version": note.version}
 
-        return task_write(action)
+    @app.post(
+        "/api/task/checklist/add", response_model=models.TaskChanged, responses=task_responses
+    )
+    def add_checklist_item(body: AddChecklistItem) -> dict:
+        return task_write(
+            lambda: changed(task_writes.add_item(vault, body.path, body.text, body.version))
+        )
+
+    @app.post(
+        "/api/task/checklist/set", response_model=models.TaskChanged, responses=task_responses
+    )
+    def set_checklist_item(body: SetChecklistItem) -> dict:
+        return task_write(
+            lambda: changed(
+                task_writes.set_item(vault, body.path, body.index, body.done, body.version)
+            )
+        )
+
+    @app.post("/api/task/details", response_model=models.TaskChanged, responses=task_responses)
+    def edit_task_details(body: TaskDetails) -> dict:
+        return task_write(
+            lambda: changed(
+                task_writes.edit_details(
+                    vault,
+                    body.path,
+                    body.version,
+                    clock(),
+                    body.priority,
+                    body.due,
+                    body.projects,
+                    body.tags,
+                    body.description,
+                )
+            )
+        )
 
     @app.post(
         "/api/task/rename",
         response_model=models.NoteRenamed,
         responses={
-            400: {"model": models.TaskRefusal, "description": "Name not allowed, or a parent"},
+            400: {"model": models.TaskRefusal, "description": "Name not allowed, or a note"},
             403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
             404: {"model": models.ErrorResponse, "description": "No such task"},
             409: {"model": models.MoveRefused, "description": "Changed on disk, or name taken"},
@@ -430,7 +458,7 @@ def create_app(settings: Settings) -> FastAPI:
         "/api/task/delete",
         response_model=models.NoteTrashed,
         responses={
-            400: {"model": models.TaskRefusal, "description": "A note, or a parent"},
+            400: {"model": models.TaskRefusal, "description": "A note, not a task"},
             403: {"model": models.ErrorResponse, "description": "Writes are turned off"},
             404: {"model": models.ErrorResponse, "description": "No such task"},
             409: {"model": models.MoveRefused, "description": "Changed on disk since opened"},

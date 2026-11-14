@@ -13,7 +13,10 @@ dateModified: 2031-04-14T10:00:00Z
 
 # Launch Atlas beta
 
-Made-up parent task for development and tests. Its sub-tasks link here through `projects` and carry the `subtask` tag.
+Made-up task with sub-tasks, for development and tests. Its sub-tasks are its checklist lines.
+
+- [x] Write the beta invite
+- [ ] Book a demo slot
 
 ## Status History
 

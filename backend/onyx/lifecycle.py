@@ -150,13 +150,15 @@ def append_to_section(content: str, heading: str, line: str, is_entry) -> str:
 # --- Frontmatter fields --------------------------------------------------------------------
 
 
-def yaml_scalar(value: str | int) -> str:
+def yaml_scalar(value: str | int | date) -> str:
     """A value as YAML that reads back as exactly that value: plain if it does,
     else JSON-quoted (e.g. "yes" or "123" as a name). A timestamp from
     local_iso stays plain, as Obsidian and Sheiko write it; YAML reads it as
     that same moment."""
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()  # a plain date, as Obsidian writes it
     if _ISO_STAMP.fullmatch(value) and _loads(value) == as_timestamp(value):
         return value
     if (
@@ -207,6 +209,66 @@ def set_fields(text: str, updates: dict[str, str | int]) -> str:
     before, _ = frontmatter.split(text)
     after, _ = frontmatter.split(changed)
     expected = {**before, **{k: _loads(yaml_scalar(v)) for k, v in updates.items()}}
+    if not before or after != expected:
+        raise FieldEditRefused("check-failed")
+    return changed
+
+
+# --- Edit details (#9 part (c)): set, replace or remove whole fields ---------------------------
+
+Value = str | int | date | list[str] | None  # None removes the field
+
+
+def _field_extent(inner: list[str], i: int) -> int:
+    """The line after field i's last line: its own line plus any indented
+    lines, or "- " lines of a list written without indentation."""
+    end = i + 1
+    while end < len(inner) and (inner[end][:1] in (" ", "\t") or inner[end].startswith("- ")):
+        end += 1
+    return end
+
+
+def set_frontmatter(text: str, updates: dict[str, Value]) -> str:
+    """Set, replace or remove top-level fields, a whole field at a time (lists
+    become a "- " list, None removes the field); a missing field is added
+    before the closing "---". Every other line is kept as written. The result
+    is parsed again and refused (FieldEditRefused) unless the only
+    differences are the intended ones."""
+    head, body = frontmatter.split_raw(text)
+    bom = "﻿" if head.startswith("﻿") else ""
+    block = head[len(bom) :]
+    if not block:
+        raise FieldEditRefused("no-frontmatter")
+    lines = block.splitlines(keepends=True)
+    newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    inner = lines[1:-1]
+    for key, value in updates.items():
+        found = [i for i, line in enumerate(inner) if re.match(rf"^{re.escape(key)}\s*:", line)]
+        if len(found) > 1:
+            raise FieldEditRefused("duplicate-field")
+        if value is None:
+            new_lines: list[str] = []
+        elif isinstance(value, list):
+            new_lines = [f"{key}:{newline}", *(f"  - {yaml_scalar(v)}{newline}" for v in value)]
+        else:
+            new_lines = [f"{key}: {yaml_scalar(value)}{newline}"]
+        if found:
+            i = found[0]
+            inner[i : _field_extent(inner, i)] = new_lines
+        else:
+            inner.extend(new_lines)
+    changed = bom + lines[0] + "".join(inner) + lines[-1] + body
+
+    before, _ = frontmatter.split(text)
+    after, _ = frontmatter.split(changed)
+    expected = dict(before)
+    for key, value in updates.items():
+        if value is None:
+            expected.pop(key, None)
+        elif isinstance(value, list):
+            expected[key] = [_loads(yaml_scalar(v)) for v in value]
+        else:
+            expected[key] = _loads(yaml_scalar(value))
     if not before or after != expected:
         raise FieldEditRefused("check-failed")
     return changed

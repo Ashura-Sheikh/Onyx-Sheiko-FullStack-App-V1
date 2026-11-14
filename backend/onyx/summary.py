@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import PurePosixPath
 
-from onyx import frontmatter, links
+from onyx import checklist, frontmatter, links
 from onyx.vault import NoteNotFound, PathRejected, Vault
 
 STAGES = ("open", "in-progress", "in-review", "done")
@@ -42,6 +42,8 @@ class Task:
     tags: tuple[str, ...] = ()
     links: tuple[str, ...] = ()  # link targets in the body and in `projects`
     project_links: tuple[str, ...] = ()  # link targets in `projects` only
+    items: tuple[checklist.Item, ...] = ()  # sub-tasks: the checklist lines
+    summary: str | None = None  # the description's first line
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,8 @@ def read_summary(vault: Vault) -> VaultSummary:
                     tags,
                     tuple(body_links + project_links),
                     tuple(project_links),
+                    tuple(checklist.items(body)),
+                    checklist.summary_line(body),
                 )
             )
             history.extend(_history(body, note.path, title))
@@ -236,60 +240,31 @@ def items(summary: VaultSummary) -> list[dict]:
     return sorted(found, key=lambda i: (i["title"].lower(), i["path"]))
 
 
-# A child task carries this tag and links to its parent task in `projects`
-# (Sheikh's decision 1a on #9). Without the tag, a `projects` link to another
-# task (a handoff linking back, say) doesn't make a sub-task.
-SUBTASK_TAG = "subtask"
-
-
 def task_board(summary: VaultSummary) -> list[dict]:
     """Every task for the Tasks board and list: by stage, then due date, then title.
 
-    Each task's `projects` are split: a link to another task, on a task tagged
-    `subtask`, names its parent (the first such link). A link to a note, or
-    to nothing yet, is a project; other links to tasks are neither. A parent
-    gets its sub-tasks' progress."""
+    Sub-tasks are each task's own checklist lines (onyx.checklist). Its
+    `projects` links to notes (or to nothing yet) are projects; a link to
+    another task (a handoff linking back, say) is left out."""
     index = links.LinkIndex([t.path for t in summary.tasks] + [n.path for n in summary.notes])
-    by_path = {t.path: t for t in summary.tasks}
+    tasks = {t.path for t in summary.tasks}
 
-    def resolves_to_task(target: str, task: Task) -> str | None:
-        found = index.resolve(target, task.path)
-        return found if found in by_path and found != task.path else None
-
-    parent_of: dict[str, str] = {}
-    for task in summary.tasks:
-        if SUBTASK_TAG not in task.tags:
-            continue
-        for target in task.project_links:
-            if parent := resolves_to_task(target, task):
-                parent_of[task.path] = parent
-                break
-    children: dict[str, list[str]] = {}
-    for child, parent in parent_of.items():
-        children.setdefault(parent, []).append(child)
+    def is_task_link(target: str, task: Task) -> bool:
+        return index.resolve(target, task.path) in tasks
 
     def order(task: Task) -> tuple:
         stage = STAGES.index(task.status) if task.status in STAGES else len(STAGES)
         return (stage, task.due is None, task.due or date.max, task.title.lower(), task.path)
 
-    board = []
-    for task in sorted(summary.tasks, key=order):
-        parent = parent_of.get(task.path)
-        kids = children.get(task.path, [])
-        board.append(
-            {
-                **_task_json(task),
-                # Projects are links to notes (or to nothing yet), never to tasks.
-                "projects": [t for t in task.project_links if not resolves_to_task(t, task)],
-                "parent": {"path": parent, "title": by_path[parent].title} if parent else None,
-                "subtasks": (
-                    {"done": sum(by_path[k].status == "done" for k in kids), "total": len(kids)}
-                    if kids
-                    else None
-                ),
-            }
-        )
-    return board
+    return [
+        {
+            **_task_json(task),
+            "projects": [t for t in task.project_links if not is_task_link(t, task)],
+            "description": task.summary,
+            "checklist": [{"text": i.text, "done": i.done} for i in task.items],
+        }
+        for task in sorted(summary.tasks, key=order)
+    ]
 
 
 def _task_json(task: Task) -> dict:
@@ -345,8 +320,9 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
     meta, body = frontmatter.split(note.text)
     title = _title(meta, body, note.path)
     folder = str(PurePosixPath(note.path).parent)
+    shown_body = checklist.without_items(body) if is_task(meta) else body
     shown = frontmatter.without_first_heading(
-        frontmatter.without_sections(body, HIDDEN_SECTIONS), title
+        frontmatter.without_sections(shown_body, HIDDEN_SECTIONS), title
     ).strip("\n")
     vault_summary = read_summary(vault)
     index = links.LinkIndex(list(listed))
@@ -384,6 +360,8 @@ def note_detail(vault: Vault, requested: str) -> dict | None:
             "completed": completed.isoformat() if completed else None,
             "closed_by": _text(meta.get("closedBy")),
             "time_to_close_minutes": _minutes(meta.get("timeToCloseMinutes")),
+            "description": checklist.description(body),
+            "checklist": [{"text": i.text, "done": i.done} for i in checklist.items(body)],
             "history": [
                 {"at": h.at.isoformat(), "from": h.from_stage, "to": h.to_stage, "remark": h.remark}
                 for h in _history(body, note.path, title)

@@ -6,7 +6,7 @@ Rules (issue #9, project-manager's #9 read, Sheikh's decisions 3a and 6):
   adds one Status History line; nothing else in the note changes;
 - done needs a sign-off by the identity the server was started with
   (--identity). The task's history must end with its move into review (as in
-  Sheiko 0.2.5, #21), and none of its sub-tasks may still be open;
+  Sheiko 0.2.5, #21), and every checklist line (its sub-tasks) must be ticked;
 - on done: a Context sign-off line, a history line "(signed off by <who> at
   <time>)", and closure fields only where they're blank: completedDate,
   closedBy, timeToCloseMinutes (only from a full-timestamp dateCreated: a
@@ -19,7 +19,7 @@ Refusals are fixed sentences chosen by code (as onyx.vault.REFUSALS).
 
 from datetime import datetime
 
-from onyx import editing, frontmatter, lifecycle, summary
+from onyx import checklist, editing, frontmatter, lifecycle
 from onyx.summary import STAGES, is_task
 from onyx.vault import Note, NoteNotFound, PathRejected, Vault
 
@@ -31,7 +31,7 @@ MOVE_REFUSALS: dict[str, str] = {
     "no-identity": "Sign-off needs a name: start the server with --identity NAME.",
     "no-review-entry": "This task's history doesn't end with its move into review, so a "
     "sign-off can't count. Move it out of review and back first.",
-    "open-subtasks": "This task has sub-tasks that aren't done yet.",
+    "open-subtasks": "This task has sub-tasks that aren't ticked yet.",
     "no-frontmatter": "This task has no frontmatter to change.",
     "duplicate-field": "This task's frontmatter has a field written twice, so it isn't "
     "changed here. Fix it in Obsidian first.",
@@ -45,11 +45,6 @@ class MoveRefused(ValueError):
     def __init__(self, code: str) -> None:
         super().__init__(MOVE_REFUSALS[code])
         self.code = code
-
-
-def _open_subtasks(vault: Vault, path: str) -> bool:
-    board = summary.task_board(summary.read_summary(vault))
-    return any(t["parent"] and t["parent"]["path"] == path and t["status"] != "done" for t in board)
 
 
 def move(
@@ -84,7 +79,8 @@ def move(
             raise MoveRefused("no-identity")
         if lifecycle.last_move_to(body) != "in-review":
             raise MoveRefused("no-review-entry")
-        if _open_subtasks(vault, name):
+        done, total = checklist.counts(body)
+        if done < total:
             raise MoveRefused("open-subtasks")
         closure = _closure_fields(meta, at, who)
         fields.update(closure)

@@ -2,7 +2,6 @@
 synthetic: true
 tags:
   - task
-  - subtask
 status: open
 priority: normal
 due: 2031-04-24
@@ -14,7 +13,7 @@ dateModified: 2031-04-14T09:35:00Z
 
 # Set up beta feedback form
 
-Made-up sub-task of Launch Atlas beta, for development and tests.
+Made-up task for development and tests. It links to Launch Atlas beta in `projects`, like a handoff linking back to its task, so that link isn't shown as a project.
 
 ## Status History
 

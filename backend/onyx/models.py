@@ -83,6 +83,11 @@ class ItemList(Model):
     items: list[Item]
 
 
+class ChecklistItem(Model):
+    text: str
+    done: bool
+
+
 class TaskHistoryEntry(Model):
     at: str = Field(description="ISO 8601 time")
     from_stage: str = Field(alias="from")
@@ -99,6 +104,8 @@ class TaskDetail(Model):
     completed: str | None
     closed_by: str | None
     time_to_close_minutes: int | None
+    description: str = Field(description="The text at the top of the task, without its checklist")
+    checklist: list[ChecklistItem] = Field(description="Sub-tasks: the task's checklist lines")
     history: list[TaskHistoryEntry]
 
 
@@ -199,20 +206,10 @@ class MoveRefused(Model):
     )
 
 
-class ParentRef(Model):
-    path: str
-    title: str
-
-
-class SubtaskCount(Model):
-    done: int
-    total: int
-
-
 class TaskCard(TaskSummary):
-    projects: list[str] = Field(description="Project links (not the parent), as written")
-    parent: ParentRef | None = Field(description="The parent task, for a task tagged subtask")
-    subtasks: SubtaskCount | None = Field(description="Sub-task progress, for a parent task")
+    projects: list[str] = Field(description="Project links to notes, as written")
+    description: str | None = Field(description="The description's first line")
+    checklist: list[ChecklistItem] = Field(description="Sub-tasks: the task's checklist lines")
 
 
 class TaskBoard(Model):
@@ -235,18 +232,10 @@ class TaskCreated(Model):
     version: str
 
 
-class SubtasksMade(Model):
-    created: list[str] = Field(description="The new sub-tasks' paths")
-    skipped: list[str] = Field(description="Lines whose sub-task was already there")
-
-
 class TaskRefusal(Model):
     detail: str
-    line: int | None = Field(
-        default=None, description="The unticked checklist line (1 = first) it's about"
-    )
 
 
-class PartlyMade(Model):
-    detail: str
-    created: list[str] = Field(description="The sub-tasks made before it stopped")
+class TaskChanged(Model):
+    path: str
+    version: str
